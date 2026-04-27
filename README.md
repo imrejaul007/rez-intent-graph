@@ -8,7 +8,7 @@ Tracks user purchase intent across the ReZ ecosystem (hotel, restaurant, retail 
 
 ```bash
 git clone <repo>
-cd packages/rez-intent-graph
+cd .
 cp .env.example .env    # fill in MONGODB_URI
 npm install
 npm run build
