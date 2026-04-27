@@ -1,5 +1,5 @@
 {
-  "name": "@rez/intent-graph",
+  "name": "rez-intent-graph",
   "version": "0.2.0",
   "description": "ReZ Mind - AI-powered commerce intelligence platform with autonomous agents for intent tracking, dormant revival, and personalized nudges",
   "main": "./dist/index.js",
