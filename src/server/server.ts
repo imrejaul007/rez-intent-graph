@@ -5,7 +5,7 @@ import 'dotenv/config';
 
 
 import express, { Request, Response, NextFunction } from 'express';
-import { connectDB, getConnectionStatus } from '../models/index.js';
+import { connectDB, getConnectionStatus } from '../database/mongodb.js';
 import intentRouter from '../api/intent.routes.js';
 import commerceMemoryRouter from '../api/commerce-memory.routes.js';
 import {

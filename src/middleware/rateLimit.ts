@@ -15,7 +15,7 @@ export const standardLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  validate: { keyGeneratorIpFallback: false },
+  validate: false,
   keyGenerator: (req) => {
     return (req.headers['x-user-id'] as string) || req.ip || 'unknown';
   },
@@ -31,7 +31,7 @@ export const strictLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Rate limit exceeded. Please slow down.' },
-  validate: { keyGeneratorIpFallback: false },
+  validate: false,
   keyGenerator: (req) => {
     return (req.headers['x-user-id'] as string) || req.ip || 'unknown';
   },
@@ -59,7 +59,7 @@ export const nudgeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Nudge rate limit exceeded. Max 10 nudges per minute.' },
-  validate: { keyGeneratorIpFallback: false },
+  validate: false,
   keyGenerator: (req) => {
     const userId = req.body?.userId || req.ip || 'unknown';
     return `nudge:${userId}`;
@@ -76,7 +76,7 @@ export const captureLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Intent capture rate limit exceeded.' },
-  validate: { keyGeneratorIpFallback: false },
+  validate: false,
   keyGenerator: (req) => {
     return (req.headers['x-user-id'] as string) || req.ip || 'unknown';
   },

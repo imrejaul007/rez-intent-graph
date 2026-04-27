@@ -14,6 +14,8 @@ export interface KnowledgeEntry {
   metadata?: Record<string, unknown>;
 }
 
+export type KnowledgeType = KnowledgeEntry['type'];
+
 export interface ChatContext {
   merchantId: string;
   relevantEntries: IMerchantKnowledge[];
@@ -62,34 +64,51 @@ export class MerchantKnowledgeService {
   }
 
   /**
-   * Search merchant knowledge
+   * Search merchant knowledge — two call signatures
+   * (1) searchKnowledge(merchantId, query, type?) — direct call
+   * (2) searchKnowledge({ merchantId, query, category, limit }) — object call
    */
   async searchKnowledge(
-    merchantId: string,
-    query: string,
+    merchantIdOrParams: string | { merchantId: string; query?: string; category?: string; limit?: number; type?: string },
+    query?: string,
     type?: string
   ): Promise<IMerchantKnowledge[]> {
+    let merchantId: string;
+    let q: string;
+    let limit: number;
+
+    if (typeof merchantIdOrParams === 'string') {
+      merchantId = merchantIdOrParams;
+      q = query || '';
+      limit = 10;
+    } else {
+      merchantId = merchantIdOrParams.merchantId;
+      q = merchantIdOrParams.query || '';
+      limit = merchantIdOrParams.limit || 10;
+      type = merchantIdOrParams.type || merchantIdOrParams.category;
+    }
+
     const searchQuery: Record<string, unknown> = { merchantId, active: true };
     if (type) searchQuery.type = type;
 
     // Try text search first
     let results = await MerchantKnowledge.find({
       ...searchQuery,
-      $text: { $search: query },
+      $text: { $search: q },
     })
       .sort({ score: { $meta: 'textScore' } })
-      .limit(10);
+      .limit(limit);
 
     // Fallback to regex search
-    if (results.length === 0) {
+    if (results.length === 0 && q) {
       results = await MerchantKnowledge.find({
         ...searchQuery,
         $or: [
-          { title: { $regex: query, $options: 'i' } },
-          { content: { $regex: query, $options: 'i' } },
-          { tags: { $regex: query, $options: 'i' } },
+          { title: { $regex: q, $options: 'i' } },
+          { content: { $regex: q, $options: 'i' } },
+          { tags: { $regex: q, $options: 'i' } },
         ],
-      }).limit(10);
+      }).limit(limit);
     }
 
     return results;
@@ -200,6 +219,36 @@ export class MerchantKnowledgeService {
     return MerchantKnowledge.find({ merchantId, type: 'offer', active: true })
       .sort({ title: 1 });
   }
+
+  /**
+   * Get knowledge base with all active entries (wrapper for autonomous chat)
+   */
+  async getKnowledgeBase(merchantId: string): Promise<{ entries: IMerchantKnowledge[] }> {
+    const entries = await MerchantKnowledge.find({ merchantId, active: true }).sort({ createdAt: -1 });
+    return { entries };
+  }
+
+  /**
+   * Add a knowledge entry (legacy wrapper)
+   */
+  async addEntry(params: { merchantId: string; type: string; title: string; content: string; tags?: string[] }): Promise<IMerchantKnowledge> {
+    return this.addKnowledgeEntry(params.merchantId, {
+      type: params.type as KnowledgeEntry['type'],
+      title: params.title,
+      content: params.content,
+      tags: params.tags,
+    });
+  }
+
+  /**
+   * Bulk import entries (legacy wrapper)
+   */
+  async bulkImport(params: { merchantId: string; entries: KnowledgeEntry[] }): Promise<{ imported: number }> {
+    const count = await this.bulkImportKnowledge(params.merchantId, params.entries);
+    return { imported: count };
+  }
+
 }
+
 
 export const merchantKnowledgeService = new MerchantKnowledgeService();

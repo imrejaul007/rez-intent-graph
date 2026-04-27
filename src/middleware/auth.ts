@@ -10,7 +10,8 @@ import type { Request, Response, NextFunction } from 'express';
  */
 export function verifyInternalToken(req: Request, res: Response, next: NextFunction): void {
   const internalToken = req.headers['x-internal-token'] as string;
-  if (internalToken && internalToken === process.env.INTERNAL_SERVICE_TOKEN) {
+  const token = process.env.INTERNAL_SERVICE_TOKEN;
+  if (internalToken && token && internalToken === token) {
     next();
     return;
   }
@@ -78,9 +79,13 @@ export function requireAnyAuth(req: Request, res: Response, next: NextFunction):
   const apiKey = req.headers['x-api-key'] as string;
   const cronSecret = req.headers['x-cron-secret'] as string;
 
-  if (internalToken && internalToken === process.env.INTERNAL_SERVICE_TOKEN) { next(); return; }
-  if (apiKey && apiKey === process.env.MERCHANT_API_KEY) { next(); return; }
-  if (cronSecret && cronSecret === process.env.INTENT_CRON_SECRET) { next(); return; }
+  const internalTokenEnv = process.env.INTERNAL_SERVICE_TOKEN;
+  const apiKeyEnv = process.env.MERCHANT_API_KEY;
+  const cronSecretEnv = process.env.INTENT_CRON_SECRET;
+
+  if (internalToken && internalTokenEnv && internalToken === internalTokenEnv) { next(); return; }
+  if (apiKey && apiKeyEnv && apiKey === apiKeyEnv) { next(); return; }
+  if (cronSecret && cronSecretEnv && cronSecret === cronSecretEnv) { next(); return; }
 
   res.status(401).json({
     error: 'Unauthorized: provide x-internal-token, x-api-key, or x-cron-secret header',

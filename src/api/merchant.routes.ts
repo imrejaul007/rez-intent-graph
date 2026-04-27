@@ -16,13 +16,15 @@ function verifyMerchantAuth(req: Request, res: Response, next: Function): void {
   const apiKey = req.headers['x-api-key'] as string;
 
   // Internal service token (server-to-server)
-  if (internalToken && internalToken === process.env.INTERNAL_SERVICE_TOKEN) {
+  const tokenEnv = process.env.INTERNAL_SERVICE_TOKEN;
+  const apiKeyEnv = process.env.MERCHANT_API_KEY;
+  if (internalToken && tokenEnv && internalToken === tokenEnv) {
     next();
     return;
   }
 
   // API key auth
-  if (apiKey && apiKey === process.env.MERCHANT_API_KEY) {
+  if (apiKey && apiKeyEnv && apiKey === apiKeyEnv) {
     next();
     return;
   }

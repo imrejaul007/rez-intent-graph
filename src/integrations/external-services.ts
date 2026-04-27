@@ -610,7 +610,7 @@ export interface PMSGuestRequest {
 export async function submitGuestRequest(request: PMSGuestRequest): Promise<{ success: boolean; requestId?: string; error?: string }> {
   try {
     // Try HTTP call first if PMS service URL is configured
-    if (SERVICES.pms && SERVICES.pms !== 'http://localhost:3006') {
+    if (SERVICES.pms && !SERVICES.pms.includes('localhost')) {
       const result = await httpRequest<{ requestId: string }>(
         `${SERVICES.pms}/guest-requests`,
         {

@@ -14,6 +14,10 @@ export { IntentCaptureService, intentCaptureService } from './services/IntentCap
 export { DormantIntentService, dormantIntentService } from './services/DormantIntentService.js';
 export { CrossAppAggregationService, crossAppAggregationService } from './services/CrossAppAggregationService.js';
 export { MerchantKnowledgeService, merchantKnowledgeService } from './services/MerchantKnowledgeService.js';
+export { AutonomousChatService, autonomousChatService } from './chat/autonomousChat.js';
+
+// Types from merchant knowledge service
+export type { KnowledgeType, KnowledgeEntry, ChatContext } from './services/MerchantKnowledgeService.js';
 
 // API Routes
 export { default as intentRouter } from './api/intent.routes.js';

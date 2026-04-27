@@ -6,7 +6,6 @@
 import {
   merchantKnowledgeService,
   autonomousChatService,
-  type KnowledgeType,
 } from '../index.js';
 
 // Enable test mode
@@ -112,13 +111,9 @@ async function testAutonomousChat(): Promise<void> {
 
   // Test: Get chat context
   console.log('Testing: Get chat context');
-  const context = await merchantKnowledgeService.getChatContext({
-    merchantId: testMerchantId,
-    userId: testUserId,
-    query: 'pasta',
-  });
-  console.log(`   Knowledge entries: ${context.merchantKnowledge.length} ✅`);
-  console.log(`   Suggestions: ${context.suggestions?.length || 0} ✅`);
+  const context = await merchantKnowledgeService.getChatContext(testMerchantId);
+  const entries = Object.values(context).flat();
+  console.log(`   Knowledge entries: ${entries.length} ✅`);
 
   // Test: End session
   console.log('Testing: End chat session');
