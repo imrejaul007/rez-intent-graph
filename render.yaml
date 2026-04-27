@@ -1,0 +1,87 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy both servers with one render.yaml
+
+services:
+  # ── API Server (port 3001) ────────────────────────────────────────────────
+  - type: web
+    name: rez-intent-api
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node dist/server/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: MONGODB_URI
+        sync: false
+      - key: INTERNAL_SERVICE_TOKEN
+        sync: false
+      - key: INTENT_WEBHOOK_SECRET
+        sync: false
+      - key: INTENT_CRON_SECRET
+        sync: false
+      - key: MERCHANT_API_KEY
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+      - key: MONOLITH_URL
+        sync: false
+      - key: ORDER_SERVICE_URL
+        sync: false
+      - key: PAYMENT_SERVICE_URL
+        sync: false
+      - key: MERCHANT_SERVICE_URL
+        sync: false
+      - key: NOTIFICATION_SERVICE_URL
+        sync: false
+      - key: AUTH_SERVICE_URL
+        sync: false
+      - key: CATALOG_SERVICE_URL
+        sync: false
+      - key: SEARCH_SERVICE_URL
+        sync: false
+      - key: MARKETING_SERVICE_URL
+        sync: false
+      - key: GAMIFICATION_SERVICE_URL
+        sync: false
+      - key: ADS_SERVICE_URL
+        sync: false
+      - key: PMS_SERVICE_URL
+        sync: false
+      - key: ANALYTICS_SERVICE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: REZ_DANGEROUS_MODE
+        value: "false"
+
+  # ── Agent Server (port 3005) ──────────────────────────────────────────────
+  - type: web
+    name: rez-intent-agent
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node dist/server/agent-server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3005
+      - key: AGENT_PORT
+        value: 3005
+      - key: MONGODB_URI
+        sync: false
+      - key: INTERNAL_SERVICE_TOKEN
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+      - key: MONOLITH_URL
+        sync: false
+      - key: REZ_DANGEROUS_MODE
+        value: "false"

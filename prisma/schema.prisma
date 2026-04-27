@@ -1,0 +1,221 @@
+// ── Intent Graph Prisma Schema ────────────────────────────────────────────────
+// RTMN Commerce Memory - Core intent tracking models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Core Intent Model ─────────────────────────────────────────────────────────
+
+model Intent {
+  id            String    @id @default(cuid())
+  userId        String
+  merchantId    String?   // Associated merchant (for demand aggregation)
+  appType       String    // hotel_ota, restaurant, retail, hotel_guest
+  category      String    // TRAVEL, DINING, RETAIL, HOTEL_SERVICE, GENERAL
+  intentKey     String    // e.g., "hotel_goa_weekend", "restaurant_biryani"
+  intentQuery   String?   // Original search query
+  metadata      Json?     // Additional structured data
+  confidence    Decimal   @db.Decimal(3, 2) // 0.00 to 1.00
+  status        String    @default("ACTIVE") // ACTIVE, DORMANT, FULFILLED, EXPIRED
+  firstSeenAt   DateTime  @default(now())
+  lastSeenAt    DateTime  @updatedAt
+
+  // Relations
+  signals         IntentSignal[]
+  dormantIntents  DormantIntent[]
+  sequences       IntentSequence[]
+
+  // Indexes
+  @@unique([userId, appType, intentKey])
+  @@index([userId, status])
+  @@index([status, lastSeenAt])
+  @@index([category, status])
+  @@index([appType, category])
+  @@index([merchantId, category])
+}
+
+// ── Intent Signal ─────────────────────────────────────────────────────────────
+
+model IntentSignal {
+  id          String    @id @default(cuid())
+  intentId    String
+  eventType   String    // search, view, wishlist, cart_add, hold, checkout_start, fulfilled, abandoned
+  weight      Decimal   @db.Decimal(3, 2)
+  data        Json?     // Additional event data
+  capturedAt  DateTime  @default(now())
+
+  // Relation
+  intent      Intent    @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([intentId])
+  @@index([eventType, capturedAt])
+  @@index([intentId, capturedAt])
+}
+
+// ── Dormant Intent ────────────────────────────────────────────────────────────
+
+model DormantIntent {
+  id              String    @id @default(cuid())
+  intentId        String
+  userId          String
+  appType         String
+  category        String
+  intentKey       String
+  dormancyScore   Decimal   @db.Decimal(4, 3) // 0.000 to 1.000
+  revivalScore    Decimal   @db.Decimal(4, 3) // 0.000 to 1.000
+  daysDormant     Int
+  lastNudgeSent   DateTime?
+  nudgeCount      Int       @default(0)
+  idealRevivalAt  DateTime?
+  status          String    @default("active") // active, paused, revived
+  revivedAt      DateTime?
+
+  // Relation
+  intent          Intent    @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@unique([userId, appType, intentKey])
+  @@index([userId, status])
+  @@index([status, revivalScore])
+  @@index([idealRevivalAt])
+}
+
+// ── Intent Sequence ───────────────────────────────────────────────────────────
+
+model IntentSequence {
+  id            String    @id @default(cuid())
+  intentId      String
+  userId        String
+  eventType     String
+  sequenceOrder Int
+  durationMs    Int?      // Time from previous event
+  occurredAt    DateTime  @default(now())
+
+  // Relation
+  intent        Intent    @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([intentId, sequenceOrder])
+  @@index([userId, occurredAt])
+}
+
+// ── Cross-App Intent Profile ──────────────────────────────────────────────────
+
+model CrossAppIntentProfile {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  travelIntentCount  Int       @default(0)
+  diningIntentCount  Int       @default(0)
+  retailIntentCount  Int       @default(0)
+  dormantTravelCount Int       @default(0)
+  dormantDiningCount Int      @default(0)
+  dormantRetailCount Int       @default(0)
+  totalConversions   Int       @default(0)
+  travelAffinity     Int       @default(50)  // 0-100 scale
+  diningAffinity     Int       @default(50)
+  retailAffinity     Int       @default(50)
+  updatedAt          DateTime  @updatedAt
+
+  // Indexes
+  @@index([travelAffinity])
+  @@index([diningAffinity])
+  @@index([totalConversions])
+}
+
+// ── Merchant Demand Signals ───────────────────────────────────────────────────
+
+model MerchantDemandSignal {
+  id              String    @id @default(cuid())
+  merchantId      String
+  category        String
+  demandCount     Int       @default(0)
+  unmetDemandPct  Decimal   @db.Decimal(5, 2) // Percentage of intents not fulfilled
+  avgPriceExpectation Int?
+  topCities       String[]
+  trend           String    @default("stable") // rising, stable, declining
+  lastAggregated  DateTime  @default(now())
+
+  // Indexes
+  @@unique([merchantId, category])
+  @@index([category, trend])
+  @@index([demandCount])
+}
+
+// ── Procurement Signals ───────────────────────────────────────────────────────
+
+model ProcurementSignal {
+  id              String    @id @default(cuid())
+  category        String
+  demandGaps      String[]  // Products high demand, low supply
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([category])
+}
+
+// ── Nudge Model ──────────────────────────────────────────────────────────────
+
+model Nudge {
+  id               String    @id @default(cuid())
+  dormantIntentId  String
+  userId           String
+  channel          String    // push, email, sms, in_app
+  message          String
+  status           String    @default("pending") // pending, sent, delivered, clicked, converted, failed
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  clickedAt        DateTime?
+  convertedAt      DateTime?
+  error            String?
+  createdAt        DateTime  @default(now())
+
+  // Indexes
+  @@index([dormantIntentId])
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([channel, status])
+}
+
+// ── Nudge Schedule ────────────────────────────────────────────────────────────
+
+model NudgeSchedule {
+  id               String    @id @default(cuid())
+  userId           String
+  category         String    // TRAVEL, DINING, RETAIL
+  triggerType      String    // scheduled, price_drop, return_user, seasonality, offer_match
+  channel          String    // push, email, sms, in_app
+  minRevivalScore  Decimal   @db.Decimal(4, 3) @default(0.3)
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, active])
+  @@index([category, triggerType])
+}
+
+// ── Merchant Knowledge ──────────────────────────────────────────────────────
+
+model MerchantKnowledge {
+  id          String    @id @default(cuid())
+  merchantId  String
+  type        String    // menu, policy, faq, offer, hours, contact, custom
+  title       String
+  content     String
+  tags        String[]
+  metadata    Json?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Indexes
+  @@index([merchantId, active])
+  @@index([type, merchantId])
+  @@index([merchantId, type])
+}
