@@ -17,6 +17,7 @@
     "test:agent-server": "tsx src/server/agent-server.ts"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "express-rate-limit": "^7.5.0",
     "ioredis": "^5.4.1",
