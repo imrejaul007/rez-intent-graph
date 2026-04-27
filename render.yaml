@@ -1,5 +1,6 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 # Deploy both servers with one render.yaml
+# Repo: https://github.com/imrejaul007/rez-intent-graph
 
 services:
   # ── API Server (port 3001) ────────────────────────────────────────────────
