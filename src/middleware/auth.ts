@@ -3,18 +3,30 @@
  * Shared auth functions for protecting API endpoints
  */
 
+import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 
 /**
  * Verify internal service token (server-to-server auth)
+ * Uses timing-safe comparison to prevent timing attacks
  */
 export function verifyInternalToken(req: Request, res: Response, next: NextFunction): void {
   const internalToken = req.headers['x-internal-token'] as string;
   const token = process.env.INTERNAL_SERVICE_TOKEN;
-  if (internalToken && token && internalToken === token) {
+
+  // Fail fast on length mismatch (prevents timing oracle)
+  if (!internalToken || !token || internalToken.length !== token.length) {
+    res.status(401).json({ error: 'Unauthorized: invalid or missing x-internal-token' });
+    return;
+  }
+
+  // Timing-safe comparison to prevent timing attacks
+  const valid = crypto.timingSafeEqual(Buffer.from(internalToken), Buffer.from(token));
+  if (valid) {
     next();
     return;
   }
+
   res.status(401).json({ error: 'Unauthorized: invalid or missing x-internal-token' });
 }
 

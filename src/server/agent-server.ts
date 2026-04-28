@@ -62,6 +62,7 @@ import chatRouter from '../api/chat.routes.js';
 // ── WebSocket Server ──────────────────────────────────────────────────────────
 import { wsServer } from '../websocket/server.js';
 import { standardLimiter } from '../middleware/rateLimit.js';
+import { verifyInternalToken } from '../middleware/auth.js';
 
 const app = express();
 const PORT = process.env.AGENT_PORT || 3005;
@@ -354,7 +355,7 @@ app.post('/api/agent/cache/invalidate/:userId', (req: Request, res: Response) =>
 
 // ── Enable Full Autonomy ────────────────────────────────────────────────────────
 
-app.post('/api/autonomous/start', async (_req: Request, res: Response) => {
+app.post('/api/autonomous/start', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
     console.log('🚨 AUTONOMOUS MODE: Starting full autonomous operation');
     await startAutonomousMode();
@@ -377,7 +378,7 @@ app.post('/api/autonomous/start', async (_req: Request, res: Response) => {
 
 // ── Disable Autonomy ───────────────────────────────────────────────────────────
 
-app.post('/api/autonomous/stop', async (_req: Request, res: Response) => {
+app.post('/api/autonomous/stop', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
     console.log('🛑 AUTONOMOUS MODE: Stopping autonomous operation');
     await stopAutonomousMode();
@@ -393,7 +394,7 @@ app.post('/api/autonomous/stop', async (_req: Request, res: Response) => {
 
 // ── Execute Dangerous Action ───────────────────────────────────────────────────
 
-app.post('/api/autonomous/action', async (req: Request, res: Response) => {
+app.post('/api/autonomous/action', verifyInternalToken, async (req: Request, res: Response) => {
   const { actionType, payload, agentName } = req.body;
 
   if (!actionType || !agentName) {
@@ -421,7 +422,7 @@ app.post('/api/autonomous/action', async (req: Request, res: Response) => {
 
 // ── Get Autonomy Status ────────────────────────────────────────────────────────
 
-app.get('/api/autonomous/status', async (_req: Request, res: Response) => {
+app.get('/api/autonomous/status', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
     const status = await getAutonomousOrchestrator().getStatus();
     const swarmStatus = await getSwarmStatus();
@@ -440,7 +441,7 @@ app.get('/api/autonomous/status', async (_req: Request, res: Response) => {
 
 // ── Emergency Stop ─────────────────────────────────────────────────────────────
 
-app.post('/api/autonomous/emergency-stop', async (req: Request, res: Response) => {
+app.post('/api/autonomous/emergency-stop', verifyInternalToken, async (req: Request, res: Response) => {
   const reason = req.body?.reason || 'Manual emergency stop via API';
 
   try {
@@ -459,7 +460,7 @@ app.post('/api/autonomous/emergency-stop', async (req: Request, res: Response) =
 
 // ── Start All Agents ───────────────────────────────────────────────────────────
 
-app.post('/api/autonomous/agents/start', async (_req: Request, res: Response) => {
+app.post('/api/autonomous/agents/start', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
     const orchestrator = getAutonomousOrchestrator();
     await orchestrator.startAllAgents();
@@ -474,7 +475,7 @@ app.post('/api/autonomous/agents/start', async (_req: Request, res: Response) =>
 
 // ── Stop All Agents ────────────────────────────────────────────────────────────
 
-app.post('/api/autonomous/agents/stop', async (_req: Request, res: Response) => {
+app.post('/api/autonomous/agents/stop', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
     const orchestrator = getAutonomousOrchestrator();
     await orchestrator.stop();

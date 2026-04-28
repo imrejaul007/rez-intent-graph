@@ -18,7 +18,7 @@ const router = Router();
  * Get comprehensive Commerce Memory context for a user
  * Used by Chat AI and Support Provider
  */
-router.get('/context/:userId', async (req: Request, res: Response) => {
+router.get('/context/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
@@ -95,7 +95,7 @@ router.get('/context/:userId', async (req: Request, res: Response) => {
  * Trigger revival for a dormant intent
  * Used by Support Provider
  */
-router.post('/revival/trigger', async (req: Request, res: Response) => {
+router.post('/revival/trigger', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId, intentKey } = req.body;
 
@@ -160,7 +160,7 @@ router.post('/offer/send', verifyInternalToken, strictLimiter, async (req: Reque
  * GET /api/commerce-memory/enriched/:userId
  * Get enriched context for AI agents
  */
-router.get('/enriched/:userId', async (req: Request, res: Response) => {
+router.get('/enriched/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const context = await crossAppAggregationService.getEnrichedContext(userId);
