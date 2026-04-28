@@ -18,7 +18,7 @@ const router = Router();
  * POST /api/intent/capture
  * Capture a new intent event
  */
-router.post('/capture', captureLimiter, async (req: Request, res: Response) => {
+router.post('/capture', verifyInternalToken, captureLimiter, async (req: Request, res: Response) => {
   try {
     const { userId, appType, intentKey, eventType, category, intentQuery, metadata, merchantId } = req.body;
 
@@ -50,7 +50,7 @@ router.post('/capture', captureLimiter, async (req: Request, res: Response) => {
  * GET /api/intent/active/:userId
  * Get active intents for a user
  */
-router.get('/active/:userId', async (req: Request, res: Response) => {
+router.get('/active/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const intents = await intentCaptureService.getActiveIntents(userId);
@@ -67,7 +67,7 @@ router.get('/active/:userId', async (req: Request, res: Response) => {
  * GET /api/intent/user/:userId
  * Get all intents for a user
  */
-router.get('/user/:userId', async (req: Request, res: Response) => {
+router.get('/user/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const intents = await intentCaptureService.getUserIntents(userId);
@@ -84,7 +84,7 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
  * GET /api/intent/dormant/:userId
  * Get dormant intents for a user
  */
-router.get('/dormant/:userId', async (req: Request, res: Response) => {
+router.get('/dormant/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const dormantIntents = await dormantIntentService.getUserDormantIntents(userId);
@@ -101,7 +101,7 @@ router.get('/dormant/:userId', async (req: Request, res: Response) => {
  * GET /api/intent/profile/:userId
  * Get cross-app intent profile for a user
  */
-router.get('/profile/:userId', async (req: Request, res: Response) => {
+router.get('/profile/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const profile = await crossAppAggregationService.getProfile(userId);
@@ -118,7 +118,7 @@ router.get('/profile/:userId', async (req: Request, res: Response) => {
  * GET /api/intent/enriched/:userId
  * Get comprehensive enriched context for an agent
  */
-router.get('/enriched/:userId', async (req: Request, res: Response) => {
+router.get('/enriched/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const context = await crossAppAggregationService.getEnrichedContext(userId);
@@ -135,7 +135,7 @@ router.get('/enriched/:userId', async (req: Request, res: Response) => {
  * POST /api/intent/revival
  * Trigger revival for a dormant intent
  */
-router.post('/revival', async (req: Request, res: Response) => {
+router.post('/revival', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { dormantIntentId, triggerType } = req.body;
 
@@ -165,7 +165,7 @@ router.post('/revival', async (req: Request, res: Response) => {
  * POST /api/intent/revived/:dormantIntentId
  * Mark a dormant intent as revived (user converted)
  */
-router.post('/revived/:dormantIntentId', async (req: Request, res: Response) => {
+router.post('/revived/:dormantIntentId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { dormantIntentId } = req.params;
     await dormantIntentService.markRevived(dormantIntentId);
@@ -182,7 +182,7 @@ router.post('/revived/:dormantIntentId', async (req: Request, res: Response) => 
  * GET /api/intent/scheduled-revivals
  * Get dormant intents due for nudge
  */
-router.get('/scheduled-revivals', async (req: Request, res: Response) => {
+router.get('/scheduled-revivals', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const candidates = await dormantIntentService.getScheduledRevivals();
     res.json(candidates);
@@ -198,7 +198,7 @@ router.get('/scheduled-revivals', async (req: Request, res: Response) => {
  * POST /api/intent/pause/:dormantIntentId
  * Pause nudges for a dormant intent
  */
-router.post('/pause/:dormantIntentId', async (req: Request, res: Response) => {
+router.post('/pause/:dormantIntentId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { dormantIntentId } = req.params;
     await dormantIntentService.pauseNudges(dormantIntentId);
@@ -215,7 +215,7 @@ router.post('/pause/:dormantIntentId', async (req: Request, res: Response) => {
  * GET /api/intent/merchant-demand/:merchantId
  * Get demand signals for a merchant
  */
-router.get('/merchant-demand/:merchantId', async (req: Request, res: Response) => {
+router.get('/merchant-demand/:merchantId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { merchantId } = req.params;
     const category = (req.query.category as string) || 'DINING';
@@ -233,7 +233,7 @@ router.get('/merchant-demand/:merchantId', async (req: Request, res: Response) =
  * GET /api/intent/affinities/:userId
  * Get user affinity scores across categories
  */
-router.get('/affinities/:userId', async (req: Request, res: Response) => {
+router.get('/affinities/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const affinities = await crossAppAggregationService.getUserAffinities(userId);
@@ -315,7 +315,7 @@ router.post('/nudge/send', verifyInternalToken, nudgeLimiter, async (req: Reques
  * GET /api/intent/nudge/history/:userId
  * Get nudge history for a user
  */
-router.get('/nudge/history/:userId', async (req: Request, res: Response) => {
+router.get('/nudge/history/:userId', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const nudges = await Nudge.find({ userId })
@@ -334,7 +334,7 @@ router.get('/nudge/history/:userId', async (req: Request, res: Response) => {
  * GET /api/intent/stats
  * Get intent graph statistics
  */
-router.get('/stats', async (req: Request, res: Response) => {
+router.get('/stats', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const summary = await crossAppAggregationService.getCrossAppSummary();
     const intentCount = await Intent.countDocuments();

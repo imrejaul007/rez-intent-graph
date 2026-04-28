@@ -3,6 +3,7 @@
 // Connects intent-graph to wallet, order, payment, and operational services
 // Includes retry + circuit breaker for resilient autonomous operations
 
+import crypto from 'crypto';
 import { sharedMemory } from '../agents/shared-memory.js';
 import { SERVICE_URLS } from '../config/services.js';
 
@@ -625,7 +626,7 @@ export async function submitGuestRequest(request: PMSGuestRequest): Promise<{ su
     }
 
     // Fallback: publish to shared memory for other services to consume
-    const requestId = `pms_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `pms_${crypto.randomUUID()}`;
 
     await sharedMemory.publish({
       from: 'intent-graph',
@@ -676,7 +677,7 @@ export interface TaskAssignment {
  */
 export async function createTask(task: TaskAssignment): Promise<{ success: boolean; taskId?: string; error?: string }> {
   try {
-    const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const taskId = `task_${crypto.randomUUID()}`;
 
     await sharedMemory.publish({
       from: 'intent-graph',
@@ -728,7 +729,7 @@ export interface StaffNotification {
  */
 export async function sendStaffNotification(notification: StaffNotification): Promise<{ success: boolean; notificationId?: string; error?: string }> {
   try {
-    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const notificationId = `notif_${crypto.randomUUID()}`;
 
     await sharedMemory.publish({
       from: 'intent-graph',
@@ -765,7 +766,7 @@ export async function sendUserNotification(
   data?: Record<string, unknown>
 ): Promise<{ success: boolean; notificationId?: string; error?: string }> {
   try {
-    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const notificationId = `notif_${crypto.randomUUID()}`;
 
     await sharedMemory.publish({
       from: 'intent-graph',
@@ -807,7 +808,7 @@ export interface MerchantOrder {
  */
 export async function sendToMerchantOS(order: MerchantOrder): Promise<{ success: boolean; merchantOrderId?: string; error?: string }> {
   try {
-    const merchantOrderId = `merch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const merchantOrderId = `merch_${crypto.randomUUID()}`;
 
     await sharedMemory.publish({
       from: 'intent-graph',
