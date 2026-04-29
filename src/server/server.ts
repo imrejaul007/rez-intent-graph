@@ -14,6 +14,8 @@ import {
   captureLimiter,
   nudgeLimiter,
 } from '../middleware/rateLimit.js';
+import { dormantIntentCronJob } from '../jobs/dormantIntentCron.js';
+import { getSwarmCoordinator, getSwarmStatus } from '../agents/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -93,12 +95,32 @@ async function startServer() {
     await connectDB();
     console.log('[MongoDB] Connected successfully');
 
+    // Start Dormant Intent Cron Job (Phase 2)
+    const ENABLE_DORMANT_CRON = process.env.ENABLE_DORMANT_CRON !== 'false';
+    if (ENABLE_DORMANT_CRON) {
+      console.log('[Intent Graph] Starting Dormant Intent Cron Job...');
+      dormantIntentCronJob.start();
+      console.log('[Intent Graph] Dormant Intent Cron Job started (runs daily)');
+    }
+
+    // Start Agent Swarm (Phase 3)
+    const ENABLE_AGENTS = process.env.ENABLE_AGENTS === 'true';
+    if (ENABLE_AGENTS) {
+      console.log('[Intent Graph] Starting Agent Swarm...');
+      const swarm = getSwarmCoordinator();
+      await swarm.start();
+      console.log('[Intent Graph] Agent Swarm started');
+    }
+
     // Start Express server
     server = app.listen(PORT, () => {
       console.log(`[Intent Graph] Server running on port ${PORT}`);
       console.log(`[Intent Graph] Health check: http://localhost:${PORT}/health`);
       console.log(`[Intent Graph] Intent API: http://localhost:${PORT}/api/intent`);
       console.log(`[Intent Graph] Commerce Memory API: http://localhost:${PORT}/api/commerce-memory`);
+      console.log(`[Intent Graph] Available features:`);
+      console.log(`[Intent Graph]   - Dormant Intent Cron: ${ENABLE_DORMANT_CRON ? 'enabled' : 'disabled'}`);
+      console.log(`[Intent Graph]   - Agent Swarm: ${ENABLE_AGENTS ? 'enabled' : 'disabled'}`);
     });
   } catch (error) {
     console.error('[Intent Graph] Failed to start server:', error);
