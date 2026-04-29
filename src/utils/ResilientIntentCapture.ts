@@ -89,7 +89,7 @@ export async function getRecommendations(
         throw new Error(`Recommendations failed: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { data?: { recommendations?: string[] } };
       return data.data?.recommendations || [];
     },
     () => {
@@ -126,7 +126,7 @@ export async function getSimilarIntents(
         throw new Error(`Similar intents failed: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { data?: { intentKey: string; similarity: number }[] };
       return data.data || [];
     },
     () => {

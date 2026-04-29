@@ -172,6 +172,14 @@ export const METRICS = {
   INTENT_DORMANT: 'intent_dormant',
   INTENT_FULFILLED: 'intent_fulfilled',
 
+  // Latency tracking
+  CAPTURE_LATENCY: 'capture_latency',
+  QUERY_LATENCY: 'query_latency',
+
+  // Error tracking
+  CAPTURE_ERROR: 'capture_error',
+  QUERY_ERROR: 'query_error',
+
   // Nudge performance
   NUDGE_SENT: 'nudge_sent',
   NUDGE_DELIVERED: 'nudge_delivered',

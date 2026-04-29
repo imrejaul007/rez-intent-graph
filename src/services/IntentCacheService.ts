@@ -18,15 +18,16 @@ const TTL = {
   USER_PROFILE: 3600, // 1 hour
   CROSS_APP_PROFILE: 1800, // 30 minutes
   DORMANT_INTENTS: 600, // 10 minutes
+  USER_INTENTS: 3600, // 1 hour
 };
 
 // Key prefixes
 const KEYS = {
-  ACTIVE_INTENTS: 'intent:active:',
-  USER_INTENTS: 'intent:user:',
-  CROSS_APP_PROFILE: 'intent:profile:',
-  DORMANT_INTENTS: 'intent:dormant:',
-  INTENT_BY_CATEGORY: 'intent:category:',
+  ACTIVE: 'intent:active:',
+  USER: 'intent:user:',
+  PROFILE: 'intent:profile:',
+  DORMANT: 'intent:dormant:',
+  CATEGORY: 'intent:category:',
 };
 
 export interface CachedIntent {
@@ -67,7 +68,7 @@ class IntentCacheService {
    * Get cached active intents for user
    */
   async getActiveIntents(userId: string): Promise<CachedIntent[] | null> {
-    const key = `${KEYS.ACTIVE_INTENTS}${userId}`;
+    const key = `${KEYS.ACTIVE}${userId}`;
 
     if (this.useRedis) {
       const cached = await sharedMemory.get<CachedIntent[]>(key);
@@ -81,7 +82,7 @@ class IntentCacheService {
    * Cache active intents for user
    */
   async setActiveIntents(userId: string, intents: CachedIntent[]): Promise<void> {
-    const key = `${KEYS.ACTIVE_INTENTS}${userId}`;
+    const key = `${KEYS.ACTIVE}${userId}`;
     await sharedMemory.set(key, intents, TTL.ACTIVE_INTENTS);
   }
 
@@ -90,14 +91,14 @@ class IntentCacheService {
    */
   async invalidateUserCache(userId: string): Promise<void> {
     const keys = [
-      `${KEYS.ACTIVE_INTENTS}${userId}`,
-      `${KEYS.USER_INTENTS}${userId}`,
-      `${KEYS.DORMANT_INTENTS}${userId}`,
-      `${KEYS.CROSS_APP_PROFILE}${userId}`,
+      `${KEYS.ACTIVE}${userId}`,
+      `${KEYS.USER}${userId}`,
+      `${KEYS.DORMANT}${userId}`,
+      `${KEYS.PROFILE}${userId}`,
     ];
 
     for (const key of keys) {
-      await sharedMemory.del(key);
+      await sharedMemory.delete(key);
     }
 
     logger.info('Cache invalidated', { userId });
@@ -107,7 +108,7 @@ class IntentCacheService {
    * Get cached cross-app profile
    */
   async getCrossAppProfile(userId: string): Promise<CachedCrossAppProfile | null> {
-    const key = `${KEYS.CROSS_APP_PROFILE}${userId}`;
+    const key = `${KEYS.PROFILE}${userId}`;
 
     if (this.useRedis) {
       const cached = await sharedMemory.get<CachedCrossAppProfile>(key);
@@ -121,7 +122,7 @@ class IntentCacheService {
    * Cache cross-app profile
    */
   async setCrossAppProfile(userId: string, profile: CachedCrossAppProfile): Promise<void> {
-    const key = `${KEYS.CROSS_APP_PROFILE}${userId}`;
+    const key = `${KEYS.PROFILE}${userId}`;
     await sharedMemory.set(key, profile, TTL.CROSS_APP_PROFILE);
   }
 
@@ -130,7 +131,7 @@ class IntentCacheService {
    */
   async cacheIntent(intent: CachedIntent): Promise<void> {
     // Add to category index
-    const categoryKey = `${KEYS.INTENT_BY_CATEGORY}${intent.category}`;
+    const categoryKey = `${KEYS.CATEGORY}${intent.category}`;
     const intents = await sharedMemory.get<string[]>(categoryKey) || [];
     if (!intents.includes(intent.id)) {
       intents.push(intent.id);
@@ -138,7 +139,7 @@ class IntentCacheService {
     }
 
     // Add to user index
-    const userKey = `${KEYS.USER_INTENTS}${intent.userId}`;
+    const userKey = `${KEYS.USER}${intent.userId}`;
     const userIntents = await sharedMemory.get<string[]>(userKey) || [];
     if (!userIntents.includes(intent.id)) {
       userIntents.push(intent.id);
@@ -150,7 +151,7 @@ class IntentCacheService {
    * Get popular intents by category (for recommendations)
    */
   async getPopularByCategory(category: string, limit: number = 10): Promise<string[]> {
-    const key = `${KEYS.INTENT_BY_CATEGORY}${category}`;
+    const key = `${KEYS.CATEGORY}${category}`;
     const ids = await sharedMemory.get<string[]>(key);
     return (ids || []).slice(0, limit);
   }
