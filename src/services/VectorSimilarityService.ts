@@ -90,7 +90,7 @@ async function getOpenAIEmbedding(text: string): Promise<number[] | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as { data: Array<{ embedding: number[] }> };
     return data.data[0].embedding;
   } catch (error) {
     logger.error('OpenAI embedding error', { error });
