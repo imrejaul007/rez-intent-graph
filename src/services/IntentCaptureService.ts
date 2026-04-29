@@ -1,6 +1,7 @@
 /**
  * Intent Capture Service - MongoDB
  * Captures user intent signals from various app events
+ * Includes Redis caching for hot data
  */
 
 import mongoose from 'mongoose';
@@ -10,6 +11,8 @@ import {
   CrossAppIntentProfile,
 } from '../models/index.js';
 import type { IIntent, IIntentSignal } from '../models/Intent.js';
+import { intentCacheService } from './IntentCacheService.js';
+import { vectorSimilarityService } from './VectorSimilarityService.js';
 
 // Event weights for confidence calculation
 const SIGNAL_WEIGHTS: Record<string, number> = {
@@ -298,12 +301,36 @@ export class IntentCaptureService {
   }
 
   /**
-   * Get active intents for a user
+   * Get active intents for a user (with Redis cache)
    */
   async getActiveIntents(userId: string): Promise<IIntent[]> {
-    return Intent.find({ userId, status: 'ACTIVE' })
+    // Try cache first
+    const cached = await intentCacheService.getActiveIntents(userId);
+    if (cached) {
+      return cached as unknown as IIntent[];
+    }
+
+    // Fall back to MongoDB
+    const intents = await Intent.find({ userId, status: 'ACTIVE' })
       .sort({ lastSeenAt: -1 })
       .limit(50);
+
+    // Cache for next request
+    if (intents.length > 0) {
+      await intentCacheService.setActiveIntents(userId, intents.map(i => ({
+        id: i._id.toString(),
+        userId: i.userId,
+        appType: i.appType,
+        intentKey: i.intentKey,
+        category: i.category,
+        confidence: i.confidence,
+        status: i.status,
+        lastSeenAt: i.lastSeenAt.toISOString(),
+        signalCount: i.signals?.length || 0,
+      })));
+    }
+
+    return intents;
   }
 
   /**
@@ -321,6 +348,39 @@ export class IntentCaptureService {
   async getIntentsByApp(userId: string, appType: string): Promise<IIntent[]> {
     return Intent.find({ userId, appType })
       .sort({ lastSeenAt: -1 });
+  }
+
+  /**
+   * Find similar intents for recommendations
+   */
+  async findSimilarIntents(
+    userId: string,
+    intentKey: string,
+    category?: string,
+    limit: number = 10
+  ): Promise<{ intentKey: string; category: string; similarity: number }[]> {
+    const results = await vectorSimilarityService.findSimilarIntents(
+      userId,
+      intentKey,
+      category,
+      limit
+    );
+    return results.map(r => ({
+      intentKey: r.intentKey,
+      category: r.category,
+      similarity: r.similarity,
+    }));
+  }
+
+  /**
+   * Get recommendations for a user based on similar users
+   */
+  async getRecommendations(
+    userId: string,
+    category?: string,
+    limit: number = 10
+  ): Promise<string[]> {
+    return vectorSimilarityService.getSimilarUserRecommendations(userId, category, limit);
   }
 }
 

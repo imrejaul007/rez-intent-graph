@@ -351,4 +351,86 @@ router.get('/stats', verifyInternalToken, async (req: Request, res: Response) =>
   }
 });
 
+// ── Similarity Search ────────────────────────────────────────────────────────
+
+/**
+ * GET /api/intent/similar
+ * Find similar intents for a user
+ * ?userId=<id>&intentKey=<key>&category=<cat>&limit=10
+ */
+router.get('/similar', verifyInternalToken, async (req: Request, res: Response) => {
+  try {
+    const { userId, intentKey, category, limit } = req.query;
+
+    if (!userId || !intentKey) {
+      return res.status(400).json({ error: 'userId and intentKey are required' });
+    }
+
+    const results = await intentCaptureService.findSimilarIntents(
+      userId as string,
+      intentKey as string,
+      category as string | undefined,
+      limit ? parseInt(limit as string) : 10
+    );
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error('[IntentAPI] Find similar failed:', error);
+    res.status(500).json({ error: 'Failed to find similar intents' });
+  }
+});
+
+/**
+ * GET /api/intent/recommendations
+ * Get recommendations for a user based on similar users
+ * ?userId=<id>&category=<cat>&limit=10
+ */
+router.get('/recommendations', verifyInternalToken, async (req: Request, res: Response) => {
+  try {
+    const { userId, category, limit } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const recommendations = await intentCaptureService.getRecommendations(
+      userId as string,
+      category as string | undefined,
+      limit ? parseInt(limit as string) : 10
+    );
+
+    res.json({ success: true, data: { recommendations } });
+  } catch (error) {
+    console.error('[IntentAPI] Get recommendations failed:', error);
+    res.status(500).json({ error: 'Failed to get recommendations' });
+  }
+});
+
+/**
+ * GET /api/intent/similar/global
+ * Find similar intents across all users (for demand signals)
+ * ?intentKey=<key>&category=<cat>&limit=20
+ */
+router.get('/similar/global', verifyInternalToken, async (req: Request, res: Response) => {
+  try {
+    const { intentKey, category, limit } = req.query;
+
+    if (!intentKey) {
+      return res.status(400).json({ error: 'intentKey is required' });
+    }
+
+    const { vectorSimilarityService } = await import('../services/VectorSimilarityService.js');
+    const results = await vectorSimilarityService.findSimilarIntentsGlobal(
+      intentKey as string,
+      category as string | undefined,
+      limit ? parseInt(limit as string) : 20
+    );
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error('[IntentAPI] Find global similar failed:', error);
+    res.status(500).json({ error: 'Failed to find global similar intents' });
+  }
+});
+
 export default router;
