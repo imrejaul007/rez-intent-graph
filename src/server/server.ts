@@ -8,6 +8,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { connectDB, getConnectionStatus } from '../database/mongodb.js';
 import intentRouter from '../api/intent.routes.js';
 import commerceMemoryRouter from '../api/commerce-memory.routes.js';
+import metricsRouter from '../api/metrics.routes.js';
 import {
   standardLimiter,
   strictLimiter,
@@ -16,6 +17,7 @@ import {
 } from '../middleware/rateLimit.js';
 import { dormantIntentCronJob } from '../jobs/dormantIntentCron.js';
 import { getSwarmCoordinator, getSwarmStatus } from '../agents/index.js';
+import { metricsStore, METRICS } from '../monitoring/metrics.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -75,6 +77,22 @@ app.get('/health', async (_req: Request, res: Response) => {
 
 app.use('/api/intent', intentRouter);
 app.use('/api/commerce-memory', commerceMemoryRouter);
+app.use('/metrics', metricsRouter); // Prometheus metrics
+
+// ── Latency Tracking Middleware ──────────────────────────────────────────────
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.path.startsWith('/api/intent/capture')) {
+      metricsStore.record(METRICS.CAPTURE_LATENCY, duration, 'histogram');
+    } else if (req.path.startsWith('/api/intent/')) {
+      metricsStore.record(METRICS.QUERY_LATENCY, duration, 'histogram');
+    }
+  });
+  next();
+});
 
 // ── Error Handler ─────────────────────────────────────────────────────────
 
