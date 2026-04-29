@@ -83,6 +83,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ── Database Connection & Server Start ─────────────────────────────────────
 
+let server: ReturnType<typeof app.listen> | null = null;
+let isShuttingDown = false;
+
 async function startServer() {
   try {
     // Connect to MongoDB
@@ -91,7 +94,7 @@ async function startServer() {
     console.log('[MongoDB] Connected successfully');
 
     // Start Express server
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`[Intent Graph] Server running on port ${PORT}`);
       console.log(`[Intent Graph] Health check: http://localhost:${PORT}/health`);
       console.log(`[Intent Graph] Intent API: http://localhost:${PORT}/api/intent`);
@@ -102,6 +105,29 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// L17 FIX: Graceful shutdown — stop accepting new connections and drain existing ones
+async function shutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[Intent Graph] ${signal} received — graceful shutdown starting`);
+
+  // Stop accepting new connections
+  if (server) {
+    server.close(() => {
+      console.log('[Intent Graph] HTTP server closed');
+    });
+  }
+
+  // Give existing connections 10 seconds to finish
+  await new Promise((resolve) => setTimeout(resolve, 10000));
+
+  console.log('[Intent Graph] Graceful shutdown complete');
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 startServer();
 
