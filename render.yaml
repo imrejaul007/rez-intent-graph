@@ -69,9 +69,13 @@ services:
       # Redis for caching and streams (OPS-001)
       - key: REDIS_URL
         sync: false
-      # OpenAI for vector embeddings (optional)
+      # Vector search (optional - requires MongoDB 7.0+)
       - key: OPENAI_API_KEY
         sync: false
+      - key: EMBEDDING_MODEL
+        value: "text-embedding-3-small"
+      - key: EMBEDDING_DIMENSION
+        value: "384"
 
   # ── Agent Server (port 3005) ──────────────────────────────────────────────
   # Background agent workers - separate from API for reliability
