@@ -107,13 +107,96 @@ export function requireAnyAuth(req: Request, res: Response, next: NextFunction):
 /**
  * Require user context — either a valid x-user-id header OR any auth method
  * Used for user-scoped read endpoints where a userId header is sufficient
+ *
+ * SECURITY NOTE: This middleware trusts the x-user-id header. It should ONLY be used
+ * when this service is behind a reverse proxy/gateway that authenticates the user
+ * and sets this header. Direct exposure to the internet would allow user spoofing.
+ *
+ * For production deployments without a trusted gateway, use requireAuthenticatedUser
+ * which verifies the JWT token.
  */
 export function requireUserOrAuth(req: Request, res: Response, next: NextFunction): void {
   const userId = req.headers['x-user-id'] as string;
+
+  // SECURITY: Validate userId format (MongoDB ObjectId)
+  if (userId) {
+    // ObjectId is 24 hex characters
+    const isValidObjectId = /^[a-fA-F0-9]{24}$/.test(userId.trim());
+    if (!isValidObjectId) {
+      res.status(400).json({ error: 'Invalid x-user-id format' });
+      return;
+    }
+    // Only accept if from trusted proxy (check X-Forwarded-For or specific header)
+    const forwardedBy = req.headers['x-trusted-proxy'];
+    if (!forwardedBy && process.env.NODE_ENV === 'production') {
+      // In production, require either auth token or trusted proxy header
+      requireAnyAuth(req, res, next);
+      return;
+    }
+  }
+
   if (userId && userId.trim() !== '') {
     next();
     return;
   }
   // Fall back to any auth method
   requireAnyAuth(req, res, next);
+}
+
+/**
+ * Verify JWT token for user authentication
+ * Use this for endpoints that need proper user verification
+ */
+export async function verifyUserJWT(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing or invalid Authorization header' });
+    return;
+  }
+
+  const token = authHeader.substring(7);
+
+  // Validate token structure (JWT has 3 parts)
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    res.status(401).json({ error: 'Invalid token format' });
+    return;
+  }
+
+  // In production, verify token with auth service
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const authServiceUrl = process.env.AUTH_SERVICE_URL;
+      if (!authServiceUrl) {
+        res.status(503).json({ error: 'Auth service not configured' });
+        return;
+      }
+
+      const response = await fetch(`${authServiceUrl}/internal/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-token': process.env.INTERNAL_SERVICE_TOKEN || '',
+        },
+        body: JSON.stringify({ token }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!response.ok) {
+        res.status(401).json({ error: 'Invalid or expired token' });
+        return;
+      }
+
+      const data = await response.json() as { userId?: string; role?: string };
+      if (data.userId) {
+        (req.headers as Record<string, string>)['x-user-id'] = data.userId;
+      }
+    } catch (error) {
+      res.status(503).json({ error: 'Auth service unavailable' });
+      return;
+    }
+  }
+
+  next();
 }

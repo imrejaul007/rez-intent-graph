@@ -27,17 +27,38 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 // CORS - restrict origins in production
+// SECURITY: Explicitly validate origins to prevent misconfiguration
 const allowedOrigins = (() => {
   const env = process.env.ALLOWED_ORIGINS;
-  if (env) return env.split(',').map(s => s.trim());
-  // Default: localhost only for dev safety
-  if (process.env.NODE_ENV === 'production') return [];
+  if (env) {
+    const origins = env.split(',').map(s => s.trim());
+    // SECURITY: Reject localhost in production even if accidentally configured
+    if (process.env.NODE_ENV === 'production') {
+      const hasLocalhost = origins.some(o => o.includes('localhost'));
+      if (hasLocalhost) {
+        console.error('[CORS] CRITICAL: localhost origins are not allowed in production!');
+        // Filter out localhost origins in production
+        return origins.filter(o => !o.includes('localhost'));
+      }
+    }
+    return origins;
+  }
+  // Default: localhost only for dev safety - NO localhost in production
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[CORS] Production mode: no CORS origins configured (secure default)');
+    return [];
+  }
   return ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:3001'];
 })();
 
+// Validate on startup
+if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+  console.log('[CORS] Production: CORS disabled (no origins allowed)');
+}
+
 app.use((req: Request, res: Response, next: NextFunction) => {
   const origin = req.headers.origin;
-  if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
