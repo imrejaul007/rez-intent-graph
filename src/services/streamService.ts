@@ -127,13 +127,14 @@ export async function readPendingMessages(
     if (!pending) return [];
 
     const messages: Array<{ id: string; event: IntentEvent }> = [];
-    const [, entries] = pending[0];
+    const [, entries] = pending[0] as [unknown, [string, unknown[]][]];
 
     for (const [id, fields] of entries) {
-      const dataField = fields.find((_, i) => i % 2 === 0 && fields[i] === 'data');
+      const stringFields = fields as unknown as string[];
+      const dataField = stringFields.find((_, i) => i % 2 === 0 && stringFields[i] === 'data');
       if (dataField !== undefined) {
-        const dataIndex = fields.indexOf(dataField);
-        const event = JSON.parse(fields[dataIndex + 1]);
+        const dataIndex = stringFields.indexOf(dataField);
+        const event = JSON.parse(stringFields[dataIndex + 1]);
         messages.push({ id, event });
       }
     }
@@ -166,13 +167,14 @@ export async function readNewMessages(
     if (!result) return [];
 
     const messages: Array<{ id: string; event: IntentEvent }> = [];
-    const [, entries] = result[0];
+    const [, entries] = result[0] as [unknown, [string, unknown[]][]];
 
     for (const [id, fields] of entries) {
-      const dataField = fields.find((_, i) => i % 2 === 0 && fields[i] === 'data');
+      const stringFields = fields as unknown as string[];
+      const dataField = stringFields.find((_, i) => i % 2 === 0 && stringFields[i] === 'data');
       if (dataField !== undefined) {
-        const dataIndex = fields.indexOf(dataField);
-        const event = JSON.parse(fields[dataIndex + 1]);
+        const dataIndex = stringFields.indexOf(dataField);
+        const event = JSON.parse(stringFields[dataIndex + 1]);
         messages.push({ id, event });
       }
     }

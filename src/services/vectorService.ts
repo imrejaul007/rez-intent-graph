@@ -2,7 +2,8 @@
 // Semantic similarity search using MongoDB's $vectorSearch
 // Stores and queries user intent embeddings for personalized recommendations
 
-import mongoose, { Collection } from 'mongoose';
+import mongoose from 'mongoose';
+import { Collection } from 'mongodb';
 
 const VECTOR_INDEX_NAME = 'intent_embeddings_index';
 const EMBEDDING_DIMENSION = 384; // Matches MiniLM model output

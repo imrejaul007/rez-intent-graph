@@ -2,12 +2,12 @@
 // Redis connection for caching and pub/sub
 // Uses ioredis for TypeScript support and performance
 
-import Redis from 'ioredis';
+import { Redis as IORedis } from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 // Main Redis client for general operations
-export const redis = new Redis(REDIS_URL, {
+export const redis = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null, // Required for Socket.io
   retryStrategy: (times: number) => {
     const delay = Math.min(times * 50, 2000);
@@ -23,7 +23,7 @@ export const redis = new Redis(REDIS_URL, {
 });
 
 // Publisher client for pub/sub (separate connection)
-export const publisher = new Redis(REDIS_URL, {
+export const publisher = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
   retryStrategy: (times: number) => {
     const delay = Math.min(times * 50, 2000);
@@ -32,7 +32,7 @@ export const publisher = new Redis(REDIS_URL, {
 });
 
 // Subscriber client for pub/sub (separate connection)
-export const subscriber = new Redis(REDIS_URL, {
+export const subscriber = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
   retryStrategy: (times: number) => {
     const delay = Math.min(times * 50, 2000);

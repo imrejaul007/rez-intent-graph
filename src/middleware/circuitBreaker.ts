@@ -2,6 +2,8 @@
 // Fail-fast pattern: when upstream services fail repeatedly, circuit opens
 // Prevents cascading failures across the ecosystem
 
+import { Request, Response } from 'express';
+
 type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 interface CircuitBreakerOptions {
