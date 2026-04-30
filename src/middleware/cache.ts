@@ -69,7 +69,7 @@ export function withCache(options: CacheOptions = {}) {
         // Only cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
           redis.setex(cacheKey, ttl, typeof body === 'string' ? body : JSON.stringify(body))
-            .catch(err => console.error('[Cache] Failed to set cache:', err));
+            .catch((err: unknown) => console.error('[Cache] Failed to set cache:', err));
         }
         res.set('X-Cache', 'MISS');
         return originalSend.call(this, body);
