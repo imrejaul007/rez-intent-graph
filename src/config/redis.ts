@@ -1,10 +1,29 @@
 // ── Redis Configuration ──────────────────────────────────────────────────────────────
 // Redis connection for caching and pub/sub
-// Uses ioredis for TypeScript support and performance
+// Supports both REDIS_URL (ioredis format) and REDIS_HOST/PORT/PASSWORD
 
 import { Redis as IORedis } from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+// Support both formats
+function getRedisConfig() {
+  // Check for REDIS_URL first
+  const redisUrl = process.env.REDIS_URL;
+  if (redisUrl) {
+    return redisUrl;
+  }
+
+  // Fall back to REDIS_HOST/PORT/PASSWORD
+  const host = process.env.REDIS_HOST || 'localhost';
+  const port = process.env.REDIS_PORT || '6379';
+  const password = process.env.REDIS_PASSWORD;
+
+  if (password) {
+    return `redis://:${password}@${host}:${port}`;
+  }
+  return `redis://${host}:${port}`;
+}
+
+const REDIS_URL = getRedisConfig();
 
 // Main Redis client for general operations
 export const redis = new IORedis(REDIS_URL, {

@@ -69,6 +69,15 @@ services:
       # Redis for caching and streams (OPS-001)
       - key: REDIS_URL
         sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: '6379'
+      - key: REDIS_PASSWORD
+        sync: false
+      # Event Platform integration
+      - key: EVENT_PLATFORM_ENABLED
+        value: 'true'
       # Vector search (optional - requires MongoDB 7.0+)
       - key: OPENAI_API_KEY
         sync: false
