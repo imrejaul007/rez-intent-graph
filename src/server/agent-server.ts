@@ -50,6 +50,9 @@ import {
   type EnrichedContext,
 } from '../integrations/agentOsIntegration.js';
 
+// ── Event Platform Integration ──────────────────────────────────────────────
+import { ensureInitialized as ensureEventPlatformInitialized } from '../integrations/eventPlatformIntegration.js';
+
 // ── Merchant API Routes ───────────────────────────────────────────────────────
 import merchantRouter from '../api/merchant.routes.js';
 
@@ -678,6 +681,12 @@ app.post('/api/shopping/execute', async (req: Request, res: Response) => {
 
 export function startAgentServer(): void {
   const coordinator = getSwarmCoordinator();
+
+  // Initialize event platform integration
+  if (process.env.EVENT_PLATFORM_ENABLED !== 'false') {
+    console.log('[Agent Server] Initializing event platform integration...');
+    ensureEventPlatformInitialized();
+  }
 
   const server = app.listen(PORT, () => {
     // Initialize WebSocket server
