@@ -54,7 +54,7 @@ export async function generateInsights(userId: string): Promise<InsightResult[]>
     }
 
     // Analyze and generate insights
-    const insights = await analyzeIntents(intents, profile);
+    const insights = await analyzeIntents(userId, intents, profile);
 
     for (const insight of insights) {
       // Emit event for real-time processing
@@ -84,6 +84,7 @@ export async function generateInsights(userId: string): Promise<InsightResult[]>
  * Analyze intents and generate appropriate insights
  */
 async function analyzeIntents(
+  userId: string,
   intents: InstanceType<typeof Intent>[],
   profile: InstanceType<typeof CrossAppIntentProfile> | null
 ): Promise<Insight[]> {
@@ -176,9 +177,9 @@ async function analyzeIntents(
   // Check for loyalty signals
   const totalSignals = intents.reduce((sum, i) => sum + (i.signals?.length || 0), 0);
   const fulfilledCount = intents.filter((i) => i.status === 'FULFILLED').length;
-  if (fulfilledCount >= 3 && totalSignals >= 10) {
+  if (fulfilledCount >= 3 && totalSignals >= 10 && intents.length > 0) {
     insights.push({
-      id: `loyalty_${userId}_${Date.now()}`,
+      id: `loyalty_${intents[0].userId}_${Date.now()}`,
       userId: intents[0].userId,
       type: 'loyalty',
       title: 'Loyalty opportunity',
@@ -241,7 +242,7 @@ export async function getInsights(userId: string): Promise<Insight[]> {
       return [];
     }
 
-    return response.json();
+    return response.json() as Promise<Insight[]>;
   } catch (error) {
     console.error('[InsightService] Error fetching insights:', error);
     return [];

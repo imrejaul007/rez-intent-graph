@@ -142,7 +142,7 @@ export class ReZWSServer {
       if (!authResult.success) {
         log.warn('[WebSocket] Connection rejected: authentication failed', {
           ip: req.socket.remoteAddress,
-          error: authResult.error,
+          error: authResult.error ? new Error(authResult.error) : undefined,
         });
         ws.close(1008, 'Authentication required');
         return;
@@ -177,7 +177,7 @@ export class ReZWSServer {
           const message: WebSocketMessage = JSON.parse(data.toString());
           this.handleMessage(clientId, message);
         } catch (error) {
-          log.error('[WebSocket] Invalid message', { clientId, error });
+          log.error('[WebSocket] Invalid message', { clientId, error: error instanceof Error ? error : String(error) });
           this.sendToClient(clientId, {
             type: 'error',
             payload: { message: 'Invalid JSON' },
@@ -201,7 +201,7 @@ export class ReZWSServer {
 
       // Handle errors
       ws.on('error', (error: Error) => {
-        log.error('[WebSocket] Client error', { clientId, error: error.message });
+        log.error('[WebSocket] Client error', { clientId, error });
       });
     });
 
@@ -252,7 +252,7 @@ export class ReZWSServer {
       client.filters.set(channel, filter);
     }
 
-    log.info('[WebSocket] Client subscribed', { clientId, channel, filter });
+    log.info('[WebSocket] Client subscribed', { clientId, channel, filter: filter || {} });
     this.sendToClient(clientId, {
       type: 'subscribed',
       payload: { channel, filter },
@@ -374,7 +374,7 @@ export class ReZWSServer {
     try {
       client.ws.send(JSON.stringify(message));
     } catch (error) {
-      log.error('[WebSocket] Failed to send to client', { clientId, error });
+      log.error('[WebSocket] Failed to send to client', { clientId, error: error instanceof Error ? error : String(error) });
     }
   }
 
@@ -412,7 +412,7 @@ export class ReZWSServer {
           ...stats,
         });
       } catch (error) {
-        log.error('[WebSocket] Metrics broadcast failed', { error });
+        log.error('[WebSocket] Metrics broadcast failed', { error: error instanceof Error ? error : String(error) });
       }
     }, 30000); // Every 30 seconds
   }

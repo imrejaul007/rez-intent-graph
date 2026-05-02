@@ -56,7 +56,7 @@ class IntentStreamService {
       // Would use XGROUP CREATE in production Redis
       log.info('[IntentStream] Consumer group initialized', { group: CONSUMER_GROUP });
     } catch (error) {
-      log.error('[IntentStream] Failed to initialize consumer group', { error });
+      log.error('[IntentStream] Failed to initialize consumer group', { error: error instanceof Error ? error : String(error) });
     }
   }
 
@@ -85,7 +85,7 @@ class IntentStreamService {
 
       log.info('[IntentStream] Signal published to stream', { stream, intentKey: signal.intentKey });
     } catch (error) {
-      log.error('[IntentStream] Failed to publish to stream', { error, stream });
+      log.error('[IntentStream] Failed to publish to stream', { error: error instanceof Error ? error : String(error), stream });
       // Fallback to direct processing
       await this.processSignal(signal);
     }
@@ -109,7 +109,7 @@ class IntentStreamService {
 
       log.info('[IntentStream] Signal processed', { eventType: signal.eventType, intentKey: signal.intentKey });
     } catch (error) {
-      log.error('[IntentStream] Failed to process signal', { error, signal });
+      log.error('[IntentStream] Failed to process signal', { error: error instanceof Error ? error : String(error), signal });
       throw error;
     }
   }
@@ -136,7 +136,7 @@ class IntentStreamService {
           // await this.consumeFromStream(STREAMS.INTENT_CAPTURE);
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error) {
-          log.error('[IntentStream] Consumer loop error', { error });
+          log.error('[IntentStream] Consumer loop error', { error: error instanceof Error ? error : String(error) });
           await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }

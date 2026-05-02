@@ -25,8 +25,8 @@ export interface LogContext {
   duration?: number;
   statusCode?: number;
   context?: string;
-  error?: Error;
-  [key: string]: string | number | boolean | Error | undefined;
+  error?: unknown;
+  [key: string]: string | number | boolean | unknown | undefined;
 }
 
 // ── Environment Configuration ────────────────────────────────────────────────────
@@ -287,7 +287,12 @@ function logWithContext(
   }
 
   if (context?.error) {
-    logData.error = context.error;
+    // Handle unknown errors - convert to proper Error object
+    if (context.error instanceof Error) {
+      logData.error = context.error;
+    } else {
+      logData.error = { name: 'Error', message: String(context.error) };
+    }
   }
 
   // Add any other custom context
@@ -377,7 +382,7 @@ export const log = {
     duration?: number;
     correlationId?: string;
     traceId?: string;
-    error?: Error;
+    error?: unknown;
   }): void {
     const level = agent.success ? 'info' : 'error';
     const message = `${agent.name} ${agent.action} ${agent.success ? 'succeeded' : 'failed'}`;
@@ -403,7 +408,7 @@ export const log = {
     duration?: number;
     correlationId?: string;
     traceId?: string;
-    error?: Error;
+    error?: unknown;
   }): void {
     const level = service.success ? 'info' : 'warn';
     const message = `${service.name}.${service.method} ${service.success ? 'success' : 'failed'}`;

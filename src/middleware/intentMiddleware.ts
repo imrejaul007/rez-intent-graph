@@ -53,7 +53,7 @@ export function createIntentCaptureMiddleware(config: IntentCaptureConfig) {
       await intentCaptureService.capture(params);
     } catch (error) {
       // Don't block request on intent capture failure
-      log.error('[IntentMiddleware] Capture failed', { error });
+      log.error('[IntentMiddleware] Capture failed', { error: error instanceof Error ? error : String(error) });
     }
 
     next();

@@ -275,7 +275,7 @@ export class AutonomousOrchestrator {
       );
     } catch (error) {
       const duration = Date.now() - start;
-      log.error(`[${agent.name}] Failed`, { error, durationMs: duration });
+      log.error(`[${agent.name}] Failed`, { error: error instanceof Error ? error : String(error), durationMs: duration });
 
       // Record failure
       await sharedMemory.set(

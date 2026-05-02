@@ -70,7 +70,7 @@ export function withCache(options: CacheOptions = {}) {
         // Only cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
           redis.setex(cacheKey, ttl, typeof body === 'string' ? body : JSON.stringify(body))
-            .catch((err: unknown) => log.error('[Cache] Failed to set cache', { error: err }));
+            .catch((err: unknown) => log.error('[Cache] Failed to set cache', { error: err instanceof Error ? err : String(err) }));
         }
         res.set('X-Cache', 'MISS');
         return originalSend.call(this, body);
@@ -78,7 +78,7 @@ export function withCache(options: CacheOptions = {}) {
 
       next();
     } catch (error) {
-      log.error('[Cache] Redis error', { error });
+      log.error('[Cache] Redis error', { error: error instanceof Error ? error : String(error) });
       // On Redis failure, continue without caching
       next();
     }
@@ -97,7 +97,7 @@ export async function invalidateCache(pattern: string): Promise<void> {
       log.info('[Cache] Invalidated cache keys', { count: keys.length, pattern });
     }
   } catch (error) {
-    log.error('[Cache] Invalidation error', { error });
+    log.error('[Cache] Invalidation error', { error: error instanceof Error ? error : String(error) });
   }
 }
 

@@ -20,12 +20,12 @@ const logger = {
 };
 
 interface InsightData {
-  userId: string;
-  insightType: string;
-  title: string;
-  recommendation: string;
-  confidence: number;
-  priority: 'high' | 'medium' | 'low';
+  userId?: string;
+  insightType?: string;
+  title?: string;
+  recommendation?: string;
+  confidence?: number;
+  priority?: 'high' | 'medium' | 'low';
   metadata?: Record<string, unknown>;
 }
 
@@ -74,7 +74,7 @@ async function handleUpsellInsight(data: InsightData): Promise<void> {
 async function handleCampaignInsight(data: InsightData): Promise<void> {
   const campaignTypes = ['cross_sell', 'loyalty', 'personalization'];
 
-  if (!campaignTypes.includes(data.insightType)) return;
+  if (!campaignTypes.includes(data.insightType as typeof campaignTypes[number])) return;
 
   try {
     const response = await fetch(`${SERVICE_URLS.marketing}/api/insights/campaign`, {
@@ -115,8 +115,8 @@ async function handleCampaignInsight(data: InsightData): Promise<void> {
 async function handleCoinOfferInsight(data: InsightData): Promise<void> {
   const coinOfferTypes = ['loyalty', 'dormant_recovery', 'cross_sell'];
 
-  if (!coinOfferTypes.includes(data.insightType)) return;
-  if (data.confidence < 0.5) return; // Only high-confidence insights trigger coin offers
+  if (!coinOfferTypes.includes(data.insightType as typeof coinOfferTypes[number])) return;
+  if ((data.confidence ?? 0) < 0.5) return; // Only high-confidence insights trigger coin offers
 
   const coinAmount = calculateCoinOffer(data);
 
@@ -163,8 +163,8 @@ function calculateCoinOffer(data: InsightData): number {
     personalization: 25,
   };
 
-  const base = baseOffers[data.insightType] || 25;
-  const confidenceMultiplier = 0.5 + data.confidence * 0.5; // 0.5-1.0 based on confidence
+  const base = data.insightType ? (baseOffers[data.insightType] || 25) : 25;
+  const confidenceMultiplier = 0.5 + (data.confidence ?? 0) * 0.5; // 0.5-1.0 based on confidence
   const priorityMultiplier = data.priority === 'high' ? 1.5 : data.priority === 'medium' ? 1.0 : 0.5;
 
   return Math.round(base * confidenceMultiplier * priorityMultiplier);
@@ -178,7 +178,7 @@ export function initializeInsightConnectors(): void {
 
   // Subscribe to insight.generated events
   subscribeToEvent('insight.generated', async (data) => {
-    const insightData = data as InsightData;
+    const insightData = data as unknown as InsightData;
 
     // Run all connectors in parallel
     await Promise.allSettled([

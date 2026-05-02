@@ -3,8 +3,21 @@
  * Provides comprehensive mocking for MongoDB operations
  */
 
-const mockMongooseInstance = {
-  connect: jest.fn().mockResolvedValue(mockMongooseInstance),
+interface MockMongoose {
+  connect: ReturnType<typeof jest.fn>;
+  disconnect: ReturnType<typeof jest.fn>;
+  connection: {
+    host: string;
+    name: string;
+    readyState: number;
+  };
+  model: ReturnType<typeof jest.fn>;
+  Schema: ReturnType<typeof jest.fn>;
+  isObjectId: (val: unknown) => boolean;
+}
+
+const mockMongooseInstance: MockMongoose = {
+  connect: jest.fn().mockResolvedValue(undefined),
   disconnect: jest.fn().mockResolvedValue(undefined),
   connection: {
     host: 'localhost',

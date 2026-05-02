@@ -3,7 +3,10 @@
  * Designed for 1M user scale testing
  */
 
-import { LoadProfile, LoadScenario } from './loadProfile.js';
+import type { LoadProfile, LoadScenario } from './types.js';
+
+// Re-export for backwards compatibility
+export type { LoadProfile, LoadScenario } from './types.js';
 
 // ============================================================================
 // Scenario Definitions

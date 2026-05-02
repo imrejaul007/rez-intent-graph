@@ -45,7 +45,7 @@ async function connectWithRetry(attempt = 1): Promise<typeof mongoose> {
     return conn;
   } catch (error) {
     if (attempt >= MAX_RETRIES) {
-      log.error('[MongoDB] Connection failed', { attempts: MAX_RETRIES, error });
+      log.error('[MongoDB] Connection failed', { attempts: MAX_RETRIES, error: error instanceof Error ? error : String(error) });
       throw error;
     }
 
@@ -74,7 +74,7 @@ export async function disconnectDB(): Promise<void> {
     isConnected = false;
     log.info('[MongoDB] Disconnected');
   } catch (error) {
-    log.error('[MongoDB] Disconnection error', { error });
+    log.error('[MongoDB] Disconnection error', { error: error instanceof Error ? error : String(error) });
     throw error;
   }
 }

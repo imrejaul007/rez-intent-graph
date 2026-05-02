@@ -456,7 +456,7 @@ export async function runPersonalizationAgent(): Promise<AgentResult> {
       data: { events: pendingEvents.length },
     };
   } catch (error) {
-    log.error('[PersonalizationAgent] Personalization update failed', { error });
+    log.error('[PersonalizationAgent] Personalization update failed', { error: error instanceof Error ? error : String(error) });
     return {
       agent: 'personalization-agent',
       success: false,

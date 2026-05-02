@@ -66,7 +66,7 @@ redis.on('connect', () => {
 });
 
 redis.on('error', (err: Error) => {
-  log.error('[Redis] Error', { error: err.message });
+  log.error('[Redis] Error', { error: err });
 });
 
 redis.on('close', () => {

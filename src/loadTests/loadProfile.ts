@@ -3,26 +3,16 @@
  * Scalable from 100 to 1M users
  */
 
-import type { LoadScenario } from './scenario.js';
+import type { LoadProfile } from './types.js';
 
 // ============================================================================
 // Profile Definitions
 // ============================================================================
 
-export interface LoadProfile {
-  name: string;
-  description: string;
-  totalUsers: number;
-  activeUsers: number;
-  concurrentConnections: number;
-  requestsPerSecond: number;
-  targetUrl: string;
-  duration: number; // minutes
-  rampUpTime: number; // minutes
-  thinkTime: number; // milliseconds
-  timeout: number; // milliseconds
-  phases: LoadPhase[];
-}
+export type { LoadProfile };
+
+// Re-export LoadScenario from types for backwards compatibility
+export type { LoadScenario } from './types.js';
 
 export interface LoadPhase {
   name: string;
@@ -55,7 +45,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 500,
     targetUrl: 'http://localhost:3000',
     duration: 10,
-    rampUpTime: 2,
+    rampUp: 2,
     thinkTime: 100,
     timeout: 30000,
     phases: [
@@ -75,7 +65,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 5000,
     targetUrl: 'http://localhost:3000',
     duration: 30,
-    rampUpTime: 5,
+    rampUp: 5,
     thinkTime: 50,
     timeout: 15000,
     phases: [
@@ -96,7 +86,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 50000,
     targetUrl: 'http://localhost:3000',
     duration: 60,
-    rampUpTime: 10,
+    rampUp: 10,
     thinkTime: 20,
     timeout: 10000,
     phases: [
@@ -118,7 +108,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 250000,
     targetUrl: 'http://localhost:3000',
     duration: 120,
-    rampUpTime: 20,
+    rampUp: 20,
     thinkTime: 10,
     timeout: 5000,
     phases: [
@@ -143,7 +133,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 50,
     targetUrl: 'http://localhost:3000',
     duration: 2,
-    rampUpTime: 0.5,
+    rampUp: 0.5,
     thinkTime: 200,
     timeout: 30000,
     phases: [
@@ -160,7 +150,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 25000,
     targetUrl: 'http://localhost:3000',
     duration: 480, // 8 hours
-    rampUpTime: 30,
+    rampUp: 30,
     thinkTime: 30,
     timeout: 10000,
     phases: [
@@ -180,7 +170,7 @@ export const LOAD_PROFILES: Record<string, LoadProfile> = {
     requestsPerSecond: 250000,
     targetUrl: 'http://localhost:3000',
     duration: 30,
-    rampUpTime: 2,
+    rampUp: 2,
     thinkTime: 5,
     timeout: 5000,
     phases: [

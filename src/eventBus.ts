@@ -22,9 +22,9 @@ export async function emitEvent(event: string, data: Record<string, unknown>): P
       timestamp: Date.now(),
     };
     await publisher.publish(CHANNEL, JSON.stringify(payload));
-    log.info(`[EventBus] Emitted: ${event}`, { userId: data.userId });
+    log.info(`[EventBus] Emitted: ${event}`, { userId: data.userId as string | undefined });
   } catch (error) {
-    log.error('[EventBus] Failed to emit event', { error });
+    log.error('[EventBus] Failed to emit event', { error: error instanceof Error ? error : String(error) });
     throw error;
   }
 }
@@ -47,12 +47,12 @@ async function ensureSubscription(): Promise<void> {
               try {
                 await handler(data);
               } catch (err) {
-                log.error(`[EventBus] Handler error for ${event}`, { error: err });
+                log.error(`[EventBus] Handler error for ${event}`, { error: err instanceof Error ? err : String(err) });
               }
             });
           }
         } catch (err) {
-          log.error('[EventBus] Failed to parse message', { error: err });
+          log.error('[EventBus] Failed to parse message', { error: err instanceof Error ? err : String(err) });
         }
       }
     });

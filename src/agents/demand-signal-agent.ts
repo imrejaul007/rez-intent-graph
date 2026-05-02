@@ -237,7 +237,7 @@ async function buildSignal(merchantId: string, category: string): Promise<Demand
       { upsert: true, new: true }
     );
   } catch (err) {
-    log.warn('[DemandSignalAgent] Failed to persist demand signal to MongoDB', { error: err, merchantId, category });
+    log.warn('[DemandSignalAgent] Failed to persist demand signal to MongoDB', { error: err instanceof Error ? err : String(err), merchantId, category });
   }
 
   return {
@@ -302,7 +302,7 @@ export async function runDemandSignalAgent(): Promise<AgentResult> {
       data: { signalsGenerated: signals.length, spikes: spikeCount },
     };
   } catch (error) {
-    log.error('[DemandSignalAgent] Demand signal aggregation failed', { error });
+    log.error('[DemandSignalAgent] Demand signal aggregation failed', { error: error instanceof Error ? error : String(error) });
     return {
       agent: 'demand-signal-agent',
       success: false,
