@@ -20,11 +20,40 @@ import type {
 
 const REDIS_URL = process.env.REDIS_URL || process.env.INTENT_GRAPH_REDIS_URL || 'redis://localhost:6379';
 
+// IORedis type interface for when the module is not available
+interface IORedisLike {
+  new(url: string, options?: Record<string, unknown>): IORedisInstance;
+  status?: string;
+}
+
+interface IORedisInstance {
+  status: string;
+  connect(): Promise<void>;
+  disconnect(): void;
+  on(event: string, handler: (arg?: unknown) => void): void;
+  zremrangebyscore(key: string, min: number, max: number): Promise<number>;
+  zcard(key: string): Promise<number>;
+  zadd(key: string, score: number, member: string): Promise<number>;
+  expire(key: string, seconds: number): Promise<number>;
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ...args: (string | number)[]): Promise<unknown>;
+  del(key: string): Promise<number>;
+  exists(key: string): Promise<number>;
+  keys(pattern: string): Promise<string[]>;
+  sadd(key: string, ...members: string[]): Promise<number>;
+  smembers(key: string): Promise<string[]>;
+  setex(key: string, seconds: number, value: string): Promise<unknown>;
+  publish(channel: string, message: string): Promise<number>;
+  subscribe(channel: string): Promise<number>;
+  duplicate(): IORedisInstance;
+  removeListener(event: string, handler: (arg?: unknown) => void): void;
+}
+
 // Try to load IORedis, fall back to null if not available
-let IORedis: any = null;
+let IORedis: IORedisLike | null = null;
 try {
   // Dynamic import to avoid build errors when ioredis not installed
-  IORedis = require('ioredis');
+  IORedis = require('ioredis') as IORedisLike;
 } catch {
   // IORedis not available, will use in-memory fallback
 }
@@ -81,11 +110,11 @@ const TTL = {
 
 // ── Redis Client (Lazy Init) ──────────────────────────────────────────────────
 
-let redisClient: any = null;
-let redisSubscriber: any = null;
+let redisClient: IORedisInstance | null = null;
+let redisSubscriber: IORedisInstance | null = null;
 let isRedisConnected = false;
 
-function getRedisClient(): any {
+function getRedisClient(): IORedisInstance | null {
   if (!IORedis) {
     logger.warn('IORedis not available, using in-memory fallback');
     return null;
@@ -134,7 +163,7 @@ function getRedisClient(): any {
   }
 }
 
-function getRedisSubscriber(): any {
+function getRedisSubscriber(): IORedisInstance | null {
   if (!IORedis) return null;
 
   if (redisSubscriber && redisSubscriber.status === 'ready') {
