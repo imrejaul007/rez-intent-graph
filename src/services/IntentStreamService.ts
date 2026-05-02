@@ -4,14 +4,10 @@
  * Falls back to direct MongoDB writes when Redis unavailable
  */
 
+import { randomUUID } from 'crypto';
 import { intentCaptureService } from './IntentCaptureService.js';
 import { sharedMemory } from '../agents/shared-memory.js';
-
-const logger = {
-  info: (msg: string, meta?: unknown) => console.log(`[IntentStream] ${msg}`, meta || ''),
-  warn: (msg: string, meta?: unknown) => console.warn(`[IntentStream] ${msg}`, meta || ''),
-  error: (msg: string, meta?: unknown) => console.error(`[IntentStream] ${msg}`, meta || ''),
-};
+import { log } from '../utils/logger.js';
 
 // Stream names
 const STREAMS = {
@@ -45,10 +41,10 @@ class IntentStreamService {
     this.consumerId = `consumer-${process.pid}-${Date.now()}`;
 
     if (this.useStreams) {
-      logger.info('Redis Streams enabled for intent ingestion');
+      log.info('[IntentStream] Redis Streams enabled for intent ingestion');
       this.initializeConsumerGroup();
     } else {
-      logger.warn('Redis unavailable - using direct MongoDB writes');
+      log.warn('[IntentStream] Redis unavailable - using direct MongoDB writes');
     }
   }
 
@@ -58,9 +54,9 @@ class IntentStreamService {
   private async initializeConsumerGroup(): Promise<void> {
     try {
       // Would use XGROUP CREATE in production Redis
-      logger.info('Consumer group initialized', { group: CONSUMER_GROUP });
+      log.info('[IntentStream] Consumer group initialized', { group: CONSUMER_GROUP });
     } catch (error) {
-      logger.error('Failed to initialize consumer group', { error });
+      log.error('[IntentStream] Failed to initialize consumer group', { error });
     }
   }
 
@@ -84,12 +80,12 @@ class IntentStreamService {
     try {
       // Store in shared memory as stream fallback
       // Production would use: await redis.xadd(stream, '*', ...fields)
-      const key = `stream:${stream}:${signal.timestamp}:${Math.random().toString(36).substr(2, 9)}`;
+      const key = `stream:${stream}:${signal.timestamp}:${randomUUID()}`;
       await sharedMemory.set(key, signal, 86400); // 24 hour TTL
 
-      logger.info('Signal published to stream', { stream, intentKey: signal.intentKey });
+      log.info('[IntentStream] Signal published to stream', { stream, intentKey: signal.intentKey });
     } catch (error) {
-      logger.error('Failed to publish to stream', { error, stream });
+      log.error('[IntentStream] Failed to publish to stream', { error, stream });
       // Fallback to direct processing
       await this.processSignal(signal);
     }
@@ -111,9 +107,9 @@ class IntentStreamService {
         merchantId: signal.merchantId,
       });
 
-      logger.info('Signal processed', { eventType: signal.eventType, intentKey: signal.intentKey });
+      log.info('[IntentStream] Signal processed', { eventType: signal.eventType, intentKey: signal.intentKey });
     } catch (error) {
-      logger.error('Failed to process signal', { error, signal });
+      log.error('[IntentStream] Failed to process signal', { error, signal });
       throw error;
     }
   }
@@ -123,12 +119,12 @@ class IntentStreamService {
    */
   async startConsumer(): Promise<void> {
     if (this.isProcessing) {
-      logger.warn('Consumer already running');
+      log.warn('[IntentStream] Consumer already running');
       return;
     }
 
     this.isProcessing = true;
-    logger.info('Starting stream consumer', { consumerId: this.consumerId });
+    log.info('[IntentStream] Starting stream consumer', { consumerId: this.consumerId });
 
     // In production, this would use XREADGROUP for distributed processing
     // For now, we rely on the direct capture flow
@@ -140,7 +136,7 @@ class IntentStreamService {
           // await this.consumeFromStream(STREAMS.INTENT_CAPTURE);
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error) {
-          logger.error('Consumer loop error', { error });
+          log.error('[IntentStream] Consumer loop error', { error });
           await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }
@@ -168,7 +164,7 @@ class IntentStreamService {
    * Stop consumer
    */
   stopConsumer(): void {
-    logger.info('Stopping stream consumer');
+    log.info('[IntentStream] Stopping stream consumer');
     this.isProcessing = false;
   }
 

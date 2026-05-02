@@ -14,3 +14,6 @@ export type { UserAffinityProfile, EnrichedContext } from './CrossAppAggregation
 
 export { MerchantKnowledgeService, merchantKnowledgeService } from './MerchantKnowledgeService.js';
 export type { KnowledgeEntry, ChatContext } from './MerchantKnowledgeService.js';
+
+export { insightService, generateInsights, getInsights } from './insightService.js';
+export type { Insight } from './insightService.js';

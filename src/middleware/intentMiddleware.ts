@@ -4,6 +4,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { intentCaptureService } from '../services/IntentCaptureService.js';
 import type { AppType, EventType, Category, CaptureIntentParams } from '../types/intent.js';
+import { log } from '../utils/logger.js';
 
 export interface IntentCaptureConfig {
   userIdExtractor: (req: Request) => string | null;
@@ -52,7 +53,7 @@ export function createIntentCaptureMiddleware(config: IntentCaptureConfig) {
       await intentCaptureService.capture(params);
     } catch (error) {
       // Don't block request on intent capture failure
-      console.error('[IntentMiddleware] Capture failed:', error);
+      log.error('[IntentMiddleware] Capture failed', { error });
     }
 
     next();

@@ -4,6 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { redis } from '../config/redis.js';
+import { log } from '../utils/logger.js';
 
 const DEFAULT_TTL = 300; // 5 minutes in seconds
 
@@ -69,7 +70,7 @@ export function withCache(options: CacheOptions = {}) {
         // Only cache successful responses
         if (res.statusCode >= 200 && res.statusCode < 300) {
           redis.setex(cacheKey, ttl, typeof body === 'string' ? body : JSON.stringify(body))
-            .catch((err: unknown) => console.error('[Cache] Failed to set cache:', err));
+            .catch((err: unknown) => log.error('[Cache] Failed to set cache', { error: err }));
         }
         res.set('X-Cache', 'MISS');
         return originalSend.call(this, body);
@@ -77,7 +78,7 @@ export function withCache(options: CacheOptions = {}) {
 
       next();
     } catch (error) {
-      console.error('[Cache] Redis error:', error);
+      log.error('[Cache] Redis error', { error });
       // On Redis failure, continue without caching
       next();
     }
@@ -93,10 +94,10 @@ export async function invalidateCache(pattern: string): Promise<void> {
     const keys = await redis.keys(`cache:${pattern}*`);
     if (keys.length > 0) {
       await redis.del(...keys);
-      console.log(`[Cache] Invalidated ${keys.length} keys matching: ${pattern}`);
+      log.info('[Cache] Invalidated cache keys', { count: keys.length, pattern });
     }
   } catch (error) {
-    console.error('[Cache] Invalidation error:', error);
+    log.error('[Cache] Invalidation error', { error });
   }
 }
 

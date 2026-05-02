@@ -7,12 +7,7 @@ import { Intent, MerchantDemandSignal } from '../models/index.js';
 import { sharedMemory } from './shared-memory.js';
 import { handleDemandSignalAction } from './action-trigger.js';
 import type { AgentConfig, AgentResult, DemandSignal } from './types.js';
-
-const logger = {
-  info: (msg: string, meta?: Record<string, unknown>) => console.log(`[DemandSignalAgent] ${msg}`, meta || ''),
-  warn: (msg: string, meta?: Record<string, unknown>) => console.warn(`[DemandSignalAgent] ${msg}`, meta || ''),
-  error: (msg: string, meta?: Record<string, unknown>) => console.error(`[DemandSignalAgent] ${msg}`, meta || ''),
-};
+import { log } from '../utils/logger.js';
 
 // ── Agent Configuration ─────────────────────────────────────────────────────────
 
@@ -242,7 +237,7 @@ async function buildSignal(merchantId: string, category: string): Promise<Demand
       { upsert: true, new: true }
     );
   } catch (err) {
-    logger.warn('Failed to persist demand signal to MongoDB', { error: err, merchantId, category });
+    log.warn('[DemandSignalAgent] Failed to persist demand signal to MongoDB', { error: err, merchantId, category });
   }
 
   return {
@@ -265,7 +260,7 @@ export async function runDemandSignalAgent(): Promise<AgentResult> {
   const start = Date.now();
 
   try {
-    logger.info('Running demand signal aggregation');
+    log.info('[DemandSignalAgent] Running demand signal aggregation');
 
     const signals = await generateProcurementSignals();
 
@@ -275,7 +270,7 @@ export async function runDemandSignalAgent(): Promise<AgentResult> {
 
       if (signal.spikeDetected) {
         spikeCount++;
-        logger.info('Demand spike detected', {
+        log.info('[DemandSignalAgent] Demand spike detected', {
           merchantId: signal.merchantId,
           category: signal.category,
           factor: signal.spikeFactor,
@@ -295,7 +290,7 @@ export async function runDemandSignalAgent(): Promise<AgentResult> {
       }
     }
 
-    logger.info('Demand signal aggregation complete', {
+    log.info('[DemandSignalAgent] Demand signal aggregation complete', {
       signals: signals.length,
       spikes: spikeCount,
     });
@@ -307,7 +302,7 @@ export async function runDemandSignalAgent(): Promise<AgentResult> {
       data: { signalsGenerated: signals.length, spikes: spikeCount },
     };
   } catch (error) {
-    logger.error('Demand signal aggregation failed', { error });
+    log.error('[DemandSignalAgent] Demand signal aggregation failed', { error });
     return {
       agent: 'demand-signal-agent',
       success: false,
@@ -340,14 +335,14 @@ let cronInterval: NodeJS.Timeout | null = null;
 export function startDemandSignalCron(): void {
   if (cronInterval) return;
 
-  logger.info('Starting demand signal cron', { intervalMs: demandSignalAgentConfig.intervalMs });
+  log.info('[DemandSignalAgent] Starting demand signal cron', { intervalMs: demandSignalAgentConfig.intervalMs });
 
   // Run immediately
-  runDemandSignalAgent().catch((err) => logger.error('Cron run failed', { error: err }));
+  runDemandSignalAgent().catch((err) => log.error('[DemandSignalAgent] Cron run failed', { error: err }));
 
   // Then every 5 minutes
   cronInterval = setInterval(
-    () => runDemandSignalAgent().catch((err) => logger.error('Cron run failed', { error: err })),
+    () => runDemandSignalAgent().catch((err) => log.error('[DemandSignalAgent] Cron run failed', { error: err })),
     demandSignalAgentConfig.intervalMs
   );
 }

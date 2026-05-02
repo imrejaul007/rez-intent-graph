@@ -20,6 +20,7 @@ import {
   runNetworkEffectAgent,
   runRevenueAttributionAgent,
 } from './index.js';
+import { log } from '../utils/logger.js';
 
 // ── Agent Definitions ─────────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ export class AutonomousOrchestrator {
   // ── Enable Full Autonomy ─────────────────────────────────────────────────
 
   async enableFullAutonomy(): Promise<void> {
-    console.log('🚨 ENABLING FULL AUTONOMOUS MODE');
+    log.warn('[Orchestrator] ENABLING FULL AUTONOMOUS MODE');
 
     this.config.enabled = true;
     this.config.dangerousMode = true;
@@ -146,17 +147,16 @@ export class AutonomousOrchestrator {
     await sharedMemory.set('orchestrator:config', this.config, 86400);
     await sharedMemory.set('orchestrator:enabled', true, 86400);
 
-    console.log('✅ Full autonomy enabled');
-    console.log('   - All agents can execute dangerous actions');
-    console.log('   - Skip-permission mode active');
-    console.log(`   - Max concurrent agents: ${this.config.maxConcurrentAgents}`);
-    console.log(`   - Emergency stop threshold: ${this.config.emergencyStopThreshold}`);
+    log.info('[Orchestrator] Full autonomy enabled', {
+      maxConcurrentAgents: this.config.maxConcurrentAgents,
+      emergencyStopThreshold: this.config.emergencyStopThreshold,
+    });
   }
 
   // ── Disable Autonomy ────────────────────────────────────────────────────
 
   async disableAutonomy(): Promise<void> {
-    console.log('🛑 Disabling autonomous mode');
+    log.info('[Orchestrator] Disabling autonomous mode');
     this.config.enabled = false;
     this.config.dangerousMode = false;
 
@@ -165,17 +165,17 @@ export class AutonomousOrchestrator {
     // Stop all agent intervals
     for (const [name, interval] of this.agentIntervals) {
       clearInterval(interval);
-      console.log(`   Stopped: ${name}`);
+      log.info('[Orchestrator] Stopped agent', { agent: name });
     }
     this.agentIntervals.clear();
 
-    console.log('✅ Autonomous mode disabled');
+    log.info('[Orchestrator] Autonomous mode disabled');
   }
 
   // ── Emergency Stop ──────────────────────────────────────────────────────
 
   async emergencyStop(reason: string): Promise<void> {
-    console.error(`🚨🚨🚨 EMERGENCY STOP: ${reason}`);
+    log.error('[Orchestrator] EMERGENCY STOP', { reason });
     this.running = false;
     this.actionCount = 0;
 
@@ -203,12 +203,12 @@ export class AutonomousOrchestrator {
 
   async startAllAgents(): Promise<void> {
     if (this.running) {
-      console.warn('Orchestrator already running');
+      log.warn('[Orchestrator] Already running');
       return;
     }
 
     this.running = true;
-    console.log('🚀 Starting autonomous orchestrator');
+    log.info('[Orchestrator] Starting autonomous orchestrator');
 
     // Start heartbeat monitoring
     this.startHeartbeat();
@@ -220,7 +220,7 @@ export class AutonomousOrchestrator {
       }
     }
 
-    console.log('✅ All agents started');
+    log.info('[Orchestrator] All agents started');
   }
 
   // ── Start Single Agent ────────────────────────────────────────────────────
@@ -230,11 +230,11 @@ export class AutonomousOrchestrator {
       return; // Already running
     }
 
-    console.log(`   Starting: ${agent.name} (autonomous: ${agent.autonomous})`);
+    log.info('[Orchestrator] Starting agent', { agent: agent.name, autonomous: agent.autonomous });
 
     // Run immediately
     this.runAgent(agent).catch(err => {
-      console.error(`Agent ${agent.name} failed:`, err);
+      log.error('[Orchestrator] Agent failed', { agent: agent.name, error: err });
     });
 
     // Schedule periodic runs (based on agent type)
@@ -242,7 +242,7 @@ export class AutonomousOrchestrator {
     const interval = setInterval(() => {
       if (this.running && this.config.enabled) {
         this.runAgent(agent).catch(err => {
-          console.error(`Agent ${agent.name} failed:`, err);
+          log.error('[Orchestrator] Agent failed', { agent: agent.name, error: err });
         });
       }
     }, intervalMs);
@@ -255,13 +255,13 @@ export class AutonomousOrchestrator {
   private async runAgent(agent: AgentDefinition): Promise<void> {
     const start = Date.now();
 
-    console.log(`[${agent.name}] Running...`);
+    log.debug(`[${agent.name}] Running`);
 
     try {
       await agent.run();
 
       const duration = Date.now() - start;
-      console.log(`[${agent.name}] Completed in ${duration}ms`);
+      log.debug(`[${agent.name}] Completed`, { durationMs: duration });
 
       // Record success
       await sharedMemory.set(
@@ -275,7 +275,7 @@ export class AutonomousOrchestrator {
       );
     } catch (error) {
       const duration = Date.now() - start;
-      console.error(`[${agent.name}] Failed:`, error);
+      log.error(`[${agent.name}] Failed`, { error, durationMs: duration });
 
       // Record failure
       await sharedMemory.set(
@@ -327,7 +327,11 @@ export class AutonomousOrchestrator {
     }
 
     // Log heartbeat
-    console.log(`💓 Heartbeat: ${swarmStatus.healthy}/${swarmStatus.totalAgents} agents healthy, actions: ${this.actionCount}`);
+    log.debug('[Orchestrator] Heartbeat', {
+      healthy: swarmStatus.healthy,
+      total: swarmStatus.totalAgents,
+      actions: this.actionCount,
+    });
 
     // Store status
     await sharedMemory.set('orchestrator:heartbeat', {
@@ -346,25 +350,25 @@ export class AutonomousOrchestrator {
     agentName: string
   ): Promise<boolean> {
     if (!this.config.enabled) {
-      console.warn('Autonomous mode not enabled');
+      log.warn('[Orchestrator] Autonomous mode not enabled');
       return false;
     }
 
     // Find agent
     const agent = AGENTS.find(a => a.name === agentName);
     if (!agent) {
-      console.error(`Unknown agent: ${agentName}`);
+      log.error('[Orchestrator] Unknown agent', { agent: agentName });
       return false;
     }
 
     // Check if agent can execute this action
     if (!agent.dangerousActions.includes(actionType)) {
-      console.warn(`Agent ${agentName} cannot execute ${actionType}`);
+      log.warn('[Orchestrator] Agent cannot execute action', { agent: agentName, action: actionType });
       return false;
     }
 
     // Execute action
-    console.log(`🚨 DANGEROUS ACTION: ${actionType} by ${agentName}`);
+    log.warn('[Orchestrator] DANGEROUS ACTION', { action: actionType, agent: agentName });
     const result = await actionExecutor.execute({
       type: actionType as any,
       target: payload.target as string || 'system',
@@ -406,7 +410,7 @@ export class AutonomousOrchestrator {
   // ── Stop ────────────────────────────────────────────────────────────────
 
   async stop(): Promise<void> {
-    console.log('🛑 Stopping orchestrator');
+    log.info('[Orchestrator] Stopping orchestrator');
     this.running = false;
 
     if (this.heartbeatInterval) {
@@ -419,7 +423,7 @@ export class AutonomousOrchestrator {
     }
     this.agentIntervals.clear();
 
-    console.log('✅ Orchestrator stopped');
+    log.info('[Orchestrator] Stopped');
   }
 }
 
@@ -465,7 +469,7 @@ export async function executeAutonomousAction(
 
   const agentName = agentMap[actionType];
   if (!agentName) {
-    console.error(`Unknown action type: ${actionType}`);
+    log.error('[Orchestrator] Unknown action type', { action: actionType });
     return false;
   }
 

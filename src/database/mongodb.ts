@@ -7,6 +7,7 @@
  */
 
 import mongoose from 'mongoose';
+import { log } from '../utils/logger.js';
 
 // MongoDB connection string for ReZ ecosystem
 const MONGODB_URI = process.env.MONGODB_URI || (() => {
@@ -40,16 +41,16 @@ async function connectWithRetry(attempt = 1): Promise<typeof mongoose> {
     });
 
     isConnected = true;
-    console.log(`MongoDB connected: ${conn.connection.host}`);
+    log.info('[MongoDB] Connected', { host: conn.connection.host });
     return conn;
   } catch (error) {
     if (attempt >= MAX_RETRIES) {
-      console.error(`MongoDB connection failed after ${MAX_RETRIES} attempts:`, error);
+      log.error('[MongoDB] Connection failed', { attempts: MAX_RETRIES, error });
       throw error;
     }
 
     const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1); // Exponential backoff
-    console.warn(`MongoDB connection attempt ${attempt} failed, retrying in ${delay}ms...`);
+    log.warn('[MongoDB] Connection failed, retrying', { attempt, delayMs: delay });
     await new Promise(resolve => setTimeout(resolve, delay));
     return connectWithRetry(attempt + 1);
   }
@@ -71,9 +72,9 @@ export async function disconnectDB(): Promise<void> {
   try {
     await mongoose.disconnect();
     isConnected = false;
-    console.log('MongoDB disconnected');
+    log.info('[MongoDB] Disconnected');
   } catch (error) {
-    console.error('MongoDB disconnection error:', error);
+    log.error('[MongoDB] Disconnection error', { error });
     throw error;
   }
 }

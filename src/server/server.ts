@@ -19,6 +19,12 @@ import { dormantIntentCronJob } from '../jobs/dormantIntentCron.js';
 import { getSwarmCoordinator, getSwarmStatus } from '../agents/index.js';
 import { metricsStore, METRICS } from '../monitoring/metrics.js';
 
+// ── Observability Imports ───────────────────────────────────────────────────────
+import { log, requestLoggingMiddleware } from '../utils/logger.js';
+import { setupSentryMiddleware } from '../utils/sentry.js';
+import { metricsMiddleware, registry } from '../utils/metrics.js';
+import healthRouter from '../health/index.js';
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -72,27 +78,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Rate limiting - global standard limit
 app.use(standardLimiter);
 
-// Request logging
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
-  });
-  next();
-});
+// Request logging (structured JSON logging with correlation IDs)
+app.use(requestLoggingMiddleware);
 
-// ── Health Check ────────────────────────────────────────────────────────────
+// Prometheus metrics middleware
+app.use(metricsMiddleware);
 
-app.get('/health', async (_req: Request, res: Response) => {
-  const mongoConnected = getConnectionStatus();
-  res.json({
-    status: 'healthy',
-    service: 'intent-graph',
-    mongodb: mongoConnected ? 'connected' : 'disconnected',
-    timestamp: new Date().toISOString(),
-  });
-});
+// ── Health Check Routes ─────────────────────────────────────────────────────
+
+app.use('/health', healthRouter);
 
 // ── API Routes ─────────────────────────────────────────────────────────────
 
@@ -117,10 +111,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // ── Error Handler ─────────────────────────────────────────────────────────
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Error]', err);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
-});
+// Sentry error middleware is set up during startup
 
 // ── Database Connection & Server Start ─────────────────────────────────────
 
@@ -129,40 +120,44 @@ let isShuttingDown = false;
 
 async function startServer() {
   try {
+    // Initialize Sentry error tracking
+    await setupSentryMiddleware(app);
+
     // Connect to MongoDB
-    console.log('[MongoDB] Connecting to ReZ ecosystem database...');
+    log.info('Connecting to ReZ ecosystem database', { context: 'MongoDB' });
     await connectDB();
-    console.log('[MongoDB] Connected successfully');
+    log.info('MongoDB connected successfully', { context: 'MongoDB' });
 
     // Start Dormant Intent Cron Job (Phase 2)
     const ENABLE_DORMANT_CRON = process.env.ENABLE_DORMANT_CRON !== 'false';
     if (ENABLE_DORMANT_CRON) {
-      console.log('[Intent Graph] Starting Dormant Intent Cron Job...');
+      log.info('Starting Dormant Intent Cron Job', { context: 'IntentGraph' });
       dormantIntentCronJob.start();
-      console.log('[Intent Graph] Dormant Intent Cron Job started (runs daily)');
+      log.info('Dormant Intent Cron Job started (runs daily)', { context: 'IntentGraph' });
     }
 
     // Start Agent Swarm (Phase 3)
     const ENABLE_AGENTS = process.env.ENABLE_AGENTS === 'true';
     if (ENABLE_AGENTS) {
-      console.log('[Intent Graph] Starting Agent Swarm...');
+      log.info('Starting Agent Swarm', { context: 'IntentGraph' });
       const swarm = getSwarmCoordinator();
       await swarm.start();
-      console.log('[Intent Graph] Agent Swarm started');
+      log.info('Agent Swarm started', { context: 'IntentGraph' });
     }
 
     // Start Express server
     server = app.listen(PORT, () => {
-      console.log(`[Intent Graph] Server running on port ${PORT}`);
-      console.log(`[Intent Graph] Health check: http://localhost:${PORT}/health`);
-      console.log(`[Intent Graph] Intent API: http://localhost:${PORT}/api/intent`);
-      console.log(`[Intent Graph] Commerce Memory API: http://localhost:${PORT}/api/commerce-memory`);
-      console.log(`[Intent Graph] Available features:`);
-      console.log(`[Intent Graph]   - Dormant Intent Cron: ${ENABLE_DORMANT_CRON ? 'enabled' : 'disabled'}`);
-      console.log(`[Intent Graph]   - Agent Swarm: ${ENABLE_AGENTS ? 'enabled' : 'disabled'}`);
+      log.info(`Server running on port ${PORT}`, { context: 'IntentGraph' });
+      log.info(`Health check: http://localhost:${PORT}/health`, { context: 'IntentGraph' });
+      log.info(`Intent API: http://localhost:${PORT}/api/intent`, { context: 'IntentGraph' });
+      log.info(`Commerce Memory API: http://localhost:${PORT}/api/commerce-memory`, { context: 'IntentGraph' });
+      log.info(`Metrics: http://localhost:${PORT}/metrics`, { context: 'IntentGraph' });
+      log.info(`Available features:`, { context: 'IntentGraph' });
+      log.info(`  - Dormant Intent Cron: ${ENABLE_DORMANT_CRON ? 'enabled' : 'disabled'}`, { context: 'IntentGraph' });
+      log.info(`  - Agent Swarm: ${ENABLE_AGENTS ? 'enabled' : 'disabled'}`, { context: 'IntentGraph' });
     });
   } catch (error) {
-    console.error('[Intent Graph] Failed to start server:', error);
+    log.error('Failed to start server', { context: 'IntentGraph', error: error as Error });
     process.exit(1);
   }
 }
@@ -171,19 +166,22 @@ async function startServer() {
 async function shutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[Intent Graph] ${signal} received — graceful shutdown starting`);
+  log.info(`${signal} received — graceful shutdown starting`, { context: 'IntentGraph' });
 
   // Stop accepting new connections
   if (server) {
     server.close(() => {
-      console.log('[Intent Graph] HTTP server closed');
+      log.info('HTTP server closed', { context: 'IntentGraph' });
     });
   }
 
   // Give existing connections 10 seconds to finish
   await new Promise((resolve) => setTimeout(resolve, 10000));
 
-  console.log('[Intent Graph] Graceful shutdown complete');
+  // Stop metrics collection
+  registry.stop();
+
+  log.info('Graceful shutdown complete', { context: 'IntentGraph' });
   process.exit(0);
 }
 

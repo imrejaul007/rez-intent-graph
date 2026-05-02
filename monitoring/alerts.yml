@@ -1,0 +1,417 @@
+# Prometheus Alert Rules for Rez Intent Graph
+# Critical, Warning, and Info level alerts for 1M user scale
+
+groups:
+  # ============================================================================
+  # Latency Alerts
+  # ============================================================================
+  - name: latency_alerts
+    interval: 30s
+    rules:
+      # P99 latency warning
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: latency
+        annotations:
+          summary: "High P99 latency detected"
+          description: "P99 latency for {{ $labels.handler }} is {{ $value | humanizeDuration }}, exceeding 500ms threshold"
+
+      # P99 latency critical
+      - alert: CriticalP99Latency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)) > 1
+        for: 2m
+        labels:
+          severity: critical
+          category: latency
+        annotations:
+          summary: "Critical P99 latency detected"
+          description: "P99 latency for {{ $labels.handler }} is {{ $value | humanizeDuration }}, exceeding 1s threshold"
+
+      # P999 latency critical
+      - alert: ExtremeP999Latency
+        expr: |
+          histogram_quantile(0.999, sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)) > 2
+        for: 1m
+        labels:
+          severity: critical
+          category: latency
+        annotations:
+          summary: "Extreme P99.9 latency detected"
+          description: "P99.9 latency for {{ $labels.handler }} is {{ $value | humanizeDuration }}"
+
+      # Latency spike
+      - alert: LatencySpike
+        expr: |
+          (
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le))
+            /
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[15m])) by (handler, le))
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+          category: latency
+        annotations:
+          summary: "Latency spike detected"
+          description: "P99 latency for {{ $labels.handler }} has increased 3x compared to 15 minutes ago"
+
+  # ============================================================================
+  # Error Rate Alerts
+  # ============================================================================
+  - name: error_alerts
+    interval: 30s
+    rules:
+      # High error rate warning
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m])) by (handler)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (handler) > 0.001
+        for: 5m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate for {{ $labels.handler }} is {{ $value | humanizePercentage }}"
+
+      # Critical error rate
+      - alert: CriticalErrorRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m])) by (handler)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (handler) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          category: errors
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate for {{ $labels.handler }} is {{ $value | humanizePercentage }}"
+
+      # Error rate increasing
+      - alert: ErrorRateIncreasing
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count[5m]))
+          )
+          >
+          (
+            sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[15m]))[10m:5m]
+            /
+            sum(rate(http_request_duration_seconds_count[15m]))[10m:5m]
+          ) * 2
+        for: 5m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "Error rate is increasing"
+          description: "Error rate has doubled compared to 15 minutes ago"
+
+      # High 4xx rate (potential abuse)
+      - alert: High4xxRate
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"4.."}[5m])) by (handler)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (handler) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High 4xx rate detected"
+          description: "4xx rate for {{ $labels.handler }} is {{ $value | humanizePercentage }}, potential abuse or misconfiguration"
+
+  # ============================================================================
+  # Throughput Alerts
+  # ============================================================================
+  - name: throughput_alerts
+    interval: 30s
+    rules:
+      # Low throughput warning
+      - alert: LowThroughput
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m])) < 0.8 * 250000
+        for: 10m
+        labels:
+          severity: warning
+          category: throughput
+        annotations:
+          summary: "Low throughput detected"
+          description: "Current RPS ({{ $value | humanize }} req/s) is below 80% of target (250,000)"
+
+      # Throughput degradation
+      - alert: ThroughputDegradation
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count[15m]))[10m:5m]
+          ) < 0.7
+        for: 5m
+        labels:
+          severity: critical
+          category: throughput
+        annotations:
+          summary: "Throughput degradation detected"
+          description: "Throughput has dropped more than 30% compared to 15 minutes ago"
+
+      # Near capacity
+      - alert: NearCapacity
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m])) > 0.9 * 250000
+        for: 5m
+        labels:
+          severity: warning
+          category: throughput
+        annotations:
+          summary: "Near capacity"
+          description: "Current RPS ({{ $value | humanize }} req/s) is above 90% of target capacity"
+
+  # ============================================================================
+  # Resource Alerts
+  # ============================================================================
+  - name: resource_alerts
+    interval: 30s
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage on {{ $labels.instance }} is {{ $value | humanizePercentage }}"
+
+      # Critical CPU usage
+      - alert: CriticalCPUUsage
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 1m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage on {{ $labels.instance }} is {{ $value | humanizePercentage }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Critical memory usage
+      - alert: CriticalMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}, risk of OOM"
+
+      # Memory growth (potential leak)
+      - alert: MemoryGrowth
+        expr: |
+          (
+            node_memory_MemUsed_bytes - node_memory_MemUsed_bytes[30m]
+          ) / node_memory_MemTotal_bytes > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Potential memory leak"
+          description: "Memory has grown by more than 10% in 30 minutes"
+
+      # High event loop lag
+      - alert: HighEventLoopLag
+        expr: |
+          avg(rate(nodejs_eventloop_lag_seconds_sum[5m]) / rate(nodejs_eventloop_lag_seconds_count[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High event loop lag"
+          description: "Event loop lag is {{ $value | humanizeDuration }}"
+
+      # Critical event loop lag
+      - alert: CriticalEventLoopLag
+        expr: |
+          avg(rate(nodejs_eventloop_lag_seconds_sum[5m]) / rate(nodejs_eventloop_lag_seconds_count[5m])) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical event loop lag"
+          description: "Event loop lag is {{ $value | humanizeDuration }}, application may be unresponsive"
+
+  # ============================================================================
+  # WebSocket Alerts
+  # ============================================================================
+  - name: websocket_alerts
+    interval: 30s
+    rules:
+      # High connection churn
+      - alert: HighConnectionChurn
+        expr: |
+          sum(rate(ws_connections_closed_total[5m])) / sum(rate(ws_connections_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: websocket
+        annotations:
+          summary: "High connection churn"
+          description: "Connection churn rate is {{ $value | humanizePercentage }}"
+
+      # Connection errors
+      - alert: WebSocketConnectionErrors
+        expr: |
+          sum(rate(ws_connection_errors_total[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: websocket
+        annotations:
+          summary: "WebSocket connection errors"
+          description: "WebSocket connection error rate is {{ $value }} errors/s"
+
+  # ============================================================================
+  # Intent Processing Alerts
+  # ============================================================================
+  - name: intent_processing_alerts
+    interval: 30s
+    rules:
+      # Queue depth high
+      - alert: HighIntentQueueDepth
+        expr: |
+          intent_queue_size > 10000
+        for: 5m
+        labels:
+          severity: warning
+          category: intent
+        annotations:
+          summary: "High intent queue depth"
+          description: "Intent processing queue has {{ $value }} items"
+
+      # Processing latency
+      - alert: IntentProcessingLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(intent_processing_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: intent
+        annotations:
+          summary: "High intent processing latency"
+          description: "Intent processing P99 latency is {{ $value | humanizeDuration }}"
+
+  # ============================================================================
+  # Database Alerts
+  # ============================================================================
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # High connection pool usage
+      - alert: HighConnectionPoolUsage
+        expr: |
+          (db_pool_connections_active / db_pool_connections_max) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High connection pool usage"
+          description: "Database connection pool usage is {{ $value | humanizePercentage }}"
+
+      # Connection pool exhausted
+      - alert: ConnectionPoolExhausted
+        expr: |
+          (db_pool_connections_active / db_pool_connections_max) * 100 > 95
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Connection pool exhausted"
+          description: "Database connection pool usage is {{ $value | humanizePercentage }}"
+
+      # Slow queries
+      - alert: HighSlowQueryRate
+        expr: |
+          sum(rate(db_slow_queries_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High slow query rate"
+          description: "Slow query rate is {{ $value }} queries/s"
+
+      # High query latency
+      - alert: HighQueryLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(db_query_duration_seconds_bucket[5m])) by (operation, le)) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High database query latency"
+          description: "Query P99 latency for {{ $labels.operation }} is {{ $value | humanizeDuration }}"
+
+  # ============================================================================
+  # SLO Alerts
+  # ============================================================================
+  - name: slo_alerts
+    interval: 60s
+    rules:
+      # Availability SLO breach (99.9%)
+      - alert: AvailabilitySLOBreach
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_count{status_code=~"2.."}[1h]))
+            /
+            sum(rate(http_request_duration_seconds_count[1h]))
+          ) < 0.999
+        for: 10m
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "Availability SLO breach warning"
+          description: "Current availability is {{ $value | humanizePercentage }}, below 99.9% SLO"
+
+      # Latency SLO breach (p95 < 500ms)
+      - alert: LatencySLOBreach
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          category: slo
+        annotations:
+          summary: "Latency SLO breach warning"
+          description: "P95 latency is {{ $value | humanizeDuration }}, above 500ms SLO target"

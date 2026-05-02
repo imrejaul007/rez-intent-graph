@@ -1,0 +1,314 @@
+# Artillery Load Test Configuration
+# Rez Intent Graph - 1M User Scale Testing
+# Usage: artillery run load-test-config.yml --environment production
+
+config:
+  # Target configuration
+  target: "http://localhost:3000"
+  tls:
+    rejectUnauthorized: false
+
+  # Plugin configuration
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+    expect: {}
+    httpretty: {}
+
+  # Variable definitions
+  variables:
+    userPoolSize: 1000000
+    activeUserPercent: 5
+    baseUrl: "http://localhost:3000"
+
+  # Payload configuration for data-driven testing
+  payload:
+    - path: "src/loadTests/data/user_ids.csv"
+      fields:
+        - userId
+      order: random
+    - path: "src/loadTests/data/product_ids.csv"
+      fields:
+        - productId
+      order: random
+    - path: "src/loadTests/data/merchant_ids.csv"
+      fields:
+        - merchantId
+      order: sequential
+
+  # Processor scripts
+  processors:
+    - src/loadTests/scenario.ts
+
+  # Timeout configuration
+  timeout: 30
+  keepAlive: true
+  maxSockets: 10000
+  maxConnections: 10000
+
+  # Phases configuration - Light Profile
+  phases:
+    # Warm up phase - gradual ramp
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+
+    # Light load testing
+    - duration: 120
+      arrivalRate: 50
+      name: "Light load"
+
+    # Normal load
+    - duration: 180
+      arrivalRate: 100
+      name: "Normal load"
+
+    # Cool down
+    - duration: 60
+      arrivalRate: 20
+      name: "Cool down"
+
+  # WebSocket configuration
+  ws:
+    # Maximum concurrent WebSocket connections
+    maxConcurrent: 5000
+
+    # Message intervals per connection
+    engine: "ws"
+
+scenarios:
+  # ==========================================================================
+  # Intent API Scenarios (70% of traffic)
+  # ==========================================================================
+
+  - name: "Capture Intent Events"
+    weight: 30
+    flow:
+      - post:
+          url: "{{ baseUrl }}/api/intent/capture"
+          json:
+            userId: "{{ userId }}"
+            sessionId: "session_{{ $randomNumber(100000, 999999) }}"
+            intentType: "{{ $randomItem(['view', 'click', 'add_to_cart', 'purchase', 'search']) }}"
+            productId: "{{ productId }}"
+            metadata:
+              source: "load-test"
+              timestamp: "{{ $timestamp }}"
+          capture:
+            - json: "$.eventId"
+              as: "eventId"
+          expect:
+            - statusCode: 200
+            - hasProperty: "eventId"
+          try:
+            maxAttempts: 3
+            delay: 100
+
+  - name: "Get User Intent Graph"
+    weight: 20
+    flow:
+      - get:
+          url: "{{ baseUrl }}/api/intent/user/{{ userId }}/graph"
+          qs:
+            depth: 3
+            includeDormant: true
+          expect:
+            - statusCode: 200
+          beforeRequest: "generateTimestamp"
+
+  - name: "Query Intent History"
+    weight: 15
+    flow:
+      - post:
+          url: "{{ baseUrl }}/api/intent/query"
+          json:
+            userId: "{{ userId }}"
+            intentTypes:
+              - purchase
+              - add_to_cart
+              - view
+            timeRange:
+              start: "{{ $timestamp(-86400000) }}"
+              end: "{{ $timestamp }}"
+            limit: 100
+          expect:
+            - statusCode: 200
+            - hasProperty: "intents"
+
+  # ==========================================================================
+  # Merchant API Scenarios (15% of traffic)
+  # ==========================================================================
+
+  - name: "Get Merchant Analytics"
+    weight: 10
+    flow:
+      - get:
+          url: "{{ baseUrl }}/api/merchant/{{ merchantId }}/analytics"
+          qs:
+            period: "7d"
+            metrics: "revenue,conversions,intents"
+          expect:
+            - statusCode: 200
+
+  - name: "Update Merchant Settings"
+    weight: 5
+    flow:
+      - put:
+          url: "{{ baseUrl }}/api/merchant/{{ merchantId }}/settings"
+          json:
+            notificationPreferences:
+              email: true
+              push: true
+            intentTracking:
+              enabled: true
+              retentionDays: 90
+          expect:
+            - statusCode: 200
+
+  # ==========================================================================
+  # Chat API Scenarios (15% of traffic)
+  # ==========================================================================
+
+  - name: "Send Chat Message"
+    weight: 10
+    flow:
+      - post:
+          url: "{{ baseUrl }}/api/chat/message"
+          json:
+            sessionId: "chat_session_{{ $randomNumber(10000, 99999) }}"
+            message: "Load test message {{ $randomString(32) }}"
+            context:
+              userId: "{{ userId }}"
+              intent: "shopping"
+          capture:
+            - json: "$.messageId"
+              as: "messageId"
+          expect:
+            - statusCode: 200
+
+  - name: "Get Chat History"
+    weight: 5
+    flow:
+      - get:
+          url: "{{ baseUrl }}/api/chat/history/chat_session_{{ $randomNumber(10000, 99999) }}"
+          qs:
+            limit: 50
+            offset: 0
+          expect:
+            - statusCode: 200
+
+  # ==========================================================================
+  # Commerce Memory Scenarios (5% of traffic)
+  # ==========================================================================
+
+  - name: "Store Commerce Memory"
+    weight: 3
+    flow:
+      - post:
+          url: "{{ baseUrl }}/api/commerce-memory"
+          json:
+            userId: "{{ userId }}"
+            eventType: "{{ $randomItem(['view', 'add_to_cart', 'purchase', 'review']) }}"
+            data:
+              productId: "{{ productId }}"
+              price: "{{ $randomNumber(10, 500) }}"
+              currency: "USD"
+          expect:
+            - statusCode: 200
+
+  - name: "Retrieve Commerce Memory"
+    weight: 2
+    flow:
+      - get:
+          url: "{{ baseUrl }}/api/commerce-memory/user/{{ userId }}"
+          qs:
+            limit: 20
+            eventTypes: "purchase,add_to_cart"
+          expect:
+            - statusCode: 200
+
+# ==========================================================================
+# Processor functions for custom logic
+# ==========================================================================
+functions:
+  generateTimestamp: |
+    module.exports = function(requestParams, context, ee, next) {
+      context.vars.timestamp = Date.now();
+      context.vars.isoTimestamp = new Date().toISOString();
+      return next();
+    }
+
+  generateUserContext: |
+    module.exports = function(requestParams, context, ee, next) {
+      context.vars.sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      context.vars.deviceId = `device_${Math.random().toString(36).substring(7)}`;
+      context.vars.userAgent = 'LoadTest/1.0';
+      return next();
+    }
+
+# ==========================================================================
+# Environment-specific overrides
+# ==========================================================================
+environments:
+  local:
+    config:
+      target: "http://localhost:3000"
+      phases:
+        - duration: 60
+          arrivalRate: 10
+          name: "Local test"
+
+  staging:
+    config:
+      target: "https://staging.rez-intent-graph.example.com"
+      phases:
+        - duration: 120
+          arrivalRate: 50
+          name: "Staging test"
+        - duration: 300
+          arrivalRate: 200
+          name: "Staging load"
+
+  production:
+    config:
+      target: "https://api.rez-intent-graph.example.com"
+      phases:
+        - duration: 180
+          arrivalRate: 100
+          name: "Production warmup"
+        - duration: 600
+          arrivalRate: 500
+          name: "Production load"
+        - duration: 300
+          arrivalRate: 1000
+          name: "Production stress"
+
+# ==========================================================================
+# Reporting configuration
+# ==========================================================================
+report:
+  # Output format: html, csv, json
+  formats:
+    - html
+    - json
+
+  # Metrics to include
+  metrics:
+    - http.response_time
+    - http.request_rate
+    - http.error_rate
+    - http.codes.2xx
+    - http.codes.4xx
+    - http.codes.5xx
+    - vusers.completed
+    - vusers.created
+    - vusers.failed
+
+  # Aggregate stats
+  percentiles:
+    - 50
+    - 75
+    - 90
+    - 95
+    - 99
+    - 99.9

@@ -1,0 +1,69 @@
+# Prometheus Configuration for Rez Intent Graph
+# Monitoring stack for 1M user scale testing
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'rez-intent-graph'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load testing metrics recording rules
+rule_files:
+  - 'alerts/*.yml'
+  - 'recording_rules/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Rez Intent Graph API Server
+  - job_name: 'rez-intent-graph-api'
+    static_configs:
+      - targets: ['localhost:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # Node.js Application Metrics
+  - job_name: 'rez-intent-graph-node'
+    static_configs:
+      - targets: ['localhost:3000']
+    metrics_path: '/api/metrics/node'
+    scrape_interval: 10s
+
+  # Redis Metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Load Generator Metrics (Artillery/k6)
+  - job_name: 'load-generator'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+# Remote write configuration for long-term storage
+remote_write:
+  - url: "https://prometheus.example.com/api/v1/write"
+    queue_config:
+      capacity: 10000
+      max_shards: 5
+      min_shards: 1
+      max_samples_per_send: 500
+    metadata_config:
+      send: true
+      send_interval: 1m

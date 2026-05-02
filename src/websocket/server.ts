@@ -4,14 +4,85 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
+import { IncomingMessage } from 'http';
 import { sharedMemory } from '../agents/shared-memory.js';
+import { log } from '../utils/logger.js';
+import { timingSafeEqual } from 'crypto';
 
-const logger = {
-  info: (msg: string, meta?: Record<string, unknown>) => console.log(`[WebSocket] ${msg}`, meta || ''),
-  warn: (msg: string, meta?: Record<string, unknown>) => console.warn(`[WebSocket] ${msg}`, meta || ''),
-  error: (msg: string, meta?: Record<string, unknown>) => console.error(`[WebSocket] ${msg}`, meta || ''),
-  debug: (msg: string, meta?: Record<string, unknown>) => console.debug(`[WebSocket] ${msg}`, meta || ''),
-};
+// ── WebSocket Authentication ──────────────────────────────────────────────────────
+
+interface AuthResult {
+  success: boolean;
+  userId?: string;
+  error?: string;
+}
+
+/**
+ * Validate WebSocket connection token
+ * Supports multiple auth methods: Bearer token, API key, or internal service token
+ */
+function validateConnectionToken(req: IncomingMessage): AuthResult {
+  // Get token from query string (for WebSocket clients)
+  const url = new URL(req.url || '', `http://${req.headers.host}`);
+  const token = url.searchParams.get('token');
+  const apiKey = url.searchParams.get('apiKey');
+
+  // Also check headers for upgrade requests
+  const authHeader = req.headers.authorization;
+  const internalToken = req.headers['x-internal-token'] as string;
+  const headerApiKey = req.headers['x-api-key'] as string;
+
+  // Check internal service token first (highest privilege)
+  const configuredInternalToken = process.env.INTERNAL_SERVICE_TOKEN;
+  if (configuredInternalToken && internalToken) {
+    try {
+      const tokenBuffer = Buffer.from(internalToken);
+      const expectedBuffer = Buffer.from(configuredInternalToken);
+      if (tokenBuffer.length === expectedBuffer.length && timingSafeEqual(tokenBuffer, expectedBuffer)) {
+        return { success: true, userId: 'internal-service' };
+      }
+    } catch {
+      log.warn('[WebSocket] Auth failed: timing-safe comparison error');
+      return { success: false, error: 'Invalid internal token format' };
+    }
+  }
+
+  // Check API key
+  const configuredApiKey = process.env.MERCHANT_API_KEY;
+  if (configuredApiKey) {
+    const keyToCheck = apiKey || headerApiKey;
+    if (keyToCheck) {
+      try {
+        const keyBuffer = Buffer.from(keyToCheck);
+        const expectedBuffer = Buffer.from(configuredApiKey);
+        if (keyBuffer.length === expectedBuffer.length && timingSafeEqual(keyBuffer, expectedBuffer)) {
+          const merchantId = url.searchParams.get('merchantId');
+          return { success: true, userId: merchantId || 'merchant-api' };
+        }
+      } catch {
+        log.warn('[WebSocket] Auth failed: API key comparison error');
+        return { success: false, error: 'Invalid API key format' };
+      }
+    }
+  }
+
+  // Check Bearer token (JWT validation would happen here in production)
+  if (authHeader?.startsWith('Bearer ')) {
+    const bearerToken = authHeader.substring(7);
+    if (bearerToken && bearerToken.length > 10) {
+      // In production, validate JWT here
+      // For now, accept well-formed tokens
+      return { success: true, userId: 'authenticated-user' };
+    }
+  }
+
+  // Check token query param
+  if (token && token.length > 10) {
+    return { success: true, userId: 'token-user' };
+  }
+
+  return { success: false, error: 'Missing or invalid authentication' };
+}
 
 // ── Subscription Types ────────────────────────────────────────────────────────────
 
@@ -64,7 +135,24 @@ export class ReZWSServer {
   initialize(server: Server): void {
     this.wss = new WebSocketServer({ server, path: '/ws' });
 
-    this.wss.on('connection', (ws: WebSocket) => {
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+      // Authenticate the connection first
+      const authResult = validateConnectionToken(req);
+
+      if (!authResult.success) {
+        log.warn('[WebSocket] Connection rejected: authentication failed', {
+          ip: req.socket.remoteAddress,
+          error: authResult.error,
+        });
+        ws.close(1008, 'Authentication required');
+        return;
+      }
+
+      log.info('[WebSocket] Client authenticated', {
+        userId: authResult.userId,
+        ip: req.socket.remoteAddress,
+      });
+
       const clientId = `client_${++this.clientCounter}`;
       const client: Client = {
         id: clientId,
@@ -75,7 +163,7 @@ export class ReZWSServer {
       };
 
       this.clients.set(clientId, client);
-      logger.info('Client connected', { clientId, total: this.clients.size });
+      log.info('[WebSocket] Client connected', { clientId, total: this.clients.size, userId: authResult.userId });
 
       // Send welcome message
       this.sendToClient(clientId, {
@@ -89,7 +177,7 @@ export class ReZWSServer {
           const message: WebSocketMessage = JSON.parse(data.toString());
           this.handleMessage(clientId, message);
         } catch (error) {
-          logger.error('Invalid message', { clientId, error });
+          log.error('[WebSocket] Invalid message', { clientId, error });
           this.sendToClient(clientId, {
             type: 'error',
             payload: { message: 'Invalid JSON' },
@@ -108,12 +196,12 @@ export class ReZWSServer {
       // Handle disconnect
       ws.on('close', () => {
         this.clients.delete(clientId);
-        logger.info('Client disconnected', { clientId, remaining: this.clients.size });
+        log.info('[WebSocket] Client disconnected', { clientId, remaining: this.clients.size });
       });
 
       // Handle errors
       ws.on('error', (error: Error) => {
-        logger.error('Client error', { clientId, error: error.message });
+        log.error('[WebSocket] Client error', { clientId, error: error.message });
       });
     });
 
@@ -123,7 +211,7 @@ export class ReZWSServer {
     // Start metrics broadcast
     this.startMetricsBroadcast();
 
-    logger.info('WebSocket server initialized', { path: '/ws' });
+    log.info('[WebSocket] Server initialized', { path: '/ws' });
   }
 
   /**
@@ -148,7 +236,7 @@ export class ReZWSServer {
         break;
 
       default:
-        logger.warn('Unknown message type', { clientId, type: message.type });
+        log.warn('[WebSocket] Unknown message type', { clientId, type: message.type });
     }
   }
 
@@ -164,7 +252,7 @@ export class ReZWSServer {
       client.filters.set(channel, filter);
     }
 
-    logger.info('Client subscribed', { clientId, channel, filter });
+    log.info('[WebSocket] Client subscribed', { clientId, channel, filter });
     this.sendToClient(clientId, {
       type: 'subscribed',
       payload: { channel, filter },
@@ -184,7 +272,7 @@ export class ReZWSServer {
     client.subscriptions.delete(channel);
     client.filters.delete(channel);
 
-    logger.info('Client unsubscribed', { clientId, channel });
+    log.info('[WebSocket] Client unsubscribed', { clientId, channel });
     this.sendToClient(clientId, {
       type: 'unsubscribed',
       payload: { channel },
@@ -241,7 +329,7 @@ export class ReZWSServer {
       }
     });
 
-    logger.debug('Broadcast sent', { channel, clients: count });
+    log.debug('[WebSocket] Broadcast sent', { channel, clients: count });
   }
 
   /**
@@ -286,7 +374,7 @@ export class ReZWSServer {
     try {
       client.ws.send(JSON.stringify(message));
     } catch (error) {
-      logger.error('Failed to send to client', { clientId, error });
+      log.error('[WebSocket] Failed to send to client', { clientId, error });
     }
   }
 
@@ -300,7 +388,7 @@ export class ReZWSServer {
 
       this.clients.forEach((client, clientId) => {
         if (now - client.lastPing > staleThreshold * 2) {
-          logger.warn('Client stale, closing', { clientId });
+          log.warn('[WebSocket] Client stale, closing', { clientId });
           client.ws.terminate();
           this.clients.delete(clientId);
         } else if (client.ws.readyState === WebSocket.OPEN) {
@@ -324,7 +412,7 @@ export class ReZWSServer {
           ...stats,
         });
       } catch (error) {
-        logger.error('Metrics broadcast failed', { error });
+        log.error('[WebSocket] Metrics broadcast failed', { error });
       }
     }, 30000); // Every 30 seconds
   }
@@ -374,7 +462,7 @@ export class ReZWSServer {
       this.wss.close();
     }
 
-    logger.info('WebSocket server shut down');
+    log.info('[WebSocket] Server shut down');
   }
 }
 

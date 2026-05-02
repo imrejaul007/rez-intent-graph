@@ -3,6 +3,7 @@
 // Supports both REDIS_URL (ioredis format) and REDIS_HOST/PORT/PASSWORD
 
 import { Redis as IORedis } from 'ioredis';
+import { log } from '../utils/logger.js';
 
 // Support both formats
 function getRedisConfig() {
@@ -61,15 +62,15 @@ export const subscriber = new IORedis(REDIS_URL, {
 
 // Connection events
 redis.on('connect', () => {
-  console.log('[Redis] Connected');
+  log.info('[Redis] Connected');
 });
 
 redis.on('error', (err: Error) => {
-  console.error('[Redis] Error:', err.message);
+  log.error('[Redis] Error', { error: err.message });
 });
 
 redis.on('close', () => {
-  console.warn('[Redis] Connection closed');
+  log.warn('[Redis] Connection closed');
 });
 
 // Health check

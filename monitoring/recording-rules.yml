@@ -1,0 +1,244 @@
+# Prometheus Recording Rules for Load Testing
+# Optimized queries for real-time monitoring
+
+groups:
+  # ============================================================================
+  # HTTP Request Metrics
+  # ============================================================================
+  - name: http_request_metrics
+    interval: 10s
+    rules:
+      # Request rate by endpoint
+      - record: http_requests_per_second:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m])) by (handler, method)
+
+      # Error rate by endpoint
+      - record: http_error_rate:ratio5m
+        expr: |
+          sum(rate(http_request_errors_total[5m])) by (handler)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (handler)
+
+      # Request rate by status code
+      - record: http_requests_by_status:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m])) by (status_code)
+
+      # Combined RPS
+      - record: http_total_requests:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m]))
+
+  # ============================================================================
+  # Latency Metrics
+  # ============================================================================
+  - name: http_latency_metrics
+    interval: 10s
+    rules:
+      # Latency percentiles by endpoint
+      - record: http_request_latency_p50:rate5m
+        expr: |
+          histogram_quantile(0.50,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)
+          )
+
+      - record: http_request_latency_p95:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)
+          )
+
+      - record: http_request_latency_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)
+          )
+
+      - record: http_request_latency_p999:rate5m
+        expr: |
+          histogram_quantile(0.999,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)
+          )
+
+      # Average latency
+      - record: http_request_latency_avg:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_sum[5m])) by (handler)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (handler)
+
+      # Latency standard deviation
+      - record: http_request_latency_stddev:rate5m
+        expr: |
+          sqrt(
+            (sum(rate(http_request_duration_seconds_bucket[5m]) * on(handler) group_right(le)
+              avg(http_request_latency_squared_seconds_sum) by (handler, le)) by (handler)
+            /
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (handler, le)
+            ) - pow(http_request_latency_avg:rate5m, 2)
+          )
+
+  # ============================================================================
+  # WebSocket Metrics
+  # ============================================================================
+  - name: websocket_metrics
+    interval: 10s
+    rules:
+      # Active WebSocket connections
+      - record: ws_active_connections:gauge
+        expr: |
+          ws_connections_total - ws_connections_closed_total
+
+      # Connection rate
+      - record: ws_connections_rate:rate5m
+        expr: |
+          sum(rate(ws_connections_total[5m]))
+
+      # Message rate
+      - record: ws_messages_rate:rate5m
+        expr: |
+          sum(rate(ws_messages_total[5m])) by (direction)
+
+      # Connection errors
+      - record: ws_connection_errors_rate:rate5m
+        expr: |
+          sum(rate(ws_connection_errors_total[5m]))
+
+  # ============================================================================
+  # Intent Processing Metrics
+  # ============================================================================
+  - name: intent_processing_metrics
+    interval: 10s
+    rules:
+      # Intent capture rate
+      - record: intents_captured_rate:rate5m
+        expr: |
+          sum(rate(intents_captured_total[5m])) by (intent_type)
+
+      # Intent processing latency
+      - record: intent_processing_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(intent_processing_duration_seconds_bucket[5m])) by (le)
+          )
+
+      # Intent queue depth
+      - record: intent_queue_depth:gauge
+        expr: |
+          intent_queue_size
+
+      # Intent processing errors
+      - record: intent_errors_rate:rate5m
+        expr: |
+          sum(rate(intent_processing_errors_total[5m]))
+
+  # ============================================================================
+  # Database Metrics
+  # ============================================================================
+  - name: database_metrics
+    interval: 10s
+    rules:
+      # Query rate
+      - record: db_queries_rate:rate5m
+        expr: |
+          sum(rate(db_query_duration_seconds_count[5m])) by (operation)
+
+      # Query latency
+      - record: db_query_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(db_query_duration_seconds_bucket[5m])) by (operation, le)
+          )
+
+      # Connection pool usage
+      - record: db_pool_usage_percent:gauge
+        expr: |
+          (db_pool_connections_active / db_pool_connections_max) * 100
+
+      # Slow queries rate
+      - record: db_slow_queries_rate:rate5m
+        expr: |
+          sum(rate(db_slow_queries_total[5m]))
+
+  # ============================================================================
+  # System Resources
+  # ============================================================================
+  - name: system_resources
+    interval: 10s
+    rules:
+      # CPU usage
+      - record: cpu_usage_percent:gauge
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      # Memory usage
+      - record: memory_usage_percent:gauge
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+      # Event loop lag
+      - record: nodejs_eventloop_lag_avg:rate5m
+        expr: |
+          avg(rate(nodejs_eventloop_lag_seconds_sum[5m]) / rate(nodejs_eventloop_lag_seconds_count[5m]))
+
+      # Active handles/requests
+      - record: nodejs_active_handles:gauge
+        expr: |
+          nodejs_active_handles_total
+
+      - record: nodejs_active_requests:gauge
+        expr: |
+          nodejs_active_requests_total
+
+  # ============================================================================
+  # Load Test Specific
+  # ============================================================================
+  - name: load_test_metrics
+    interval: 10s
+    rules:
+      # VU count
+      - record: loadtest_vus:gauge
+        expr: |
+          loadtest_vus
+
+      # Request failure rate
+      - record: loadtest_request_failure_rate:ratio5m
+        expr: |
+          sum(rate(loadtest_requests_failed[5m]))
+          /
+          sum(rate(loadtest_requests_total[5m]))
+
+      # Request latency under load
+      - record: loadtest_request_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(loadtest_request_duration_seconds_bucket[5m])) by (le)
+          )
+
+  # ============================================================================
+  # SLI/SLO Metrics
+  # ============================================================================
+  - name: sli_slo_metrics
+    interval: 30s
+    rules:
+      # Availability (successful requests / total requests)
+      - record: slo_availability:ratio5m
+        expr: |
+          1 - (
+            sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count[5m]))
+          )
+
+      # Latency SLO (p95 < 500ms)
+      - record: slo_latency_p95_ok:ratio5m
+        expr: |
+          sum(rate(http_request_duration_seconds_bucket{le="0.5"}[5m]))
+          /
+          sum(rate(http_request_duration_seconds_count[5m]))
+
+      # Goodput (successful non-redirect requests)
+      - record: slo_goodput:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"20[0-9]"}[5m]))

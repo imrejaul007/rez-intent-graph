@@ -66,6 +66,9 @@ export const SERVICE_URLS = {
 
   // ── Analytics ──────────────────────────────────────────────────────────────
   analytics:    requireServiceUrl('analytics',     'ANALYTICS_SERVICE_URL'),
+
+  // ── Insights ──────────────────────────────────────────────────────────────
+  insights:     requireServiceUrl('insights',      'INSIGHTS_SERVICE_URL'),
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_URLS;

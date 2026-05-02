@@ -3,12 +3,18 @@
 // MongoDB implementation
 
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { Intent, MerchantDemandSignal } from '../models/index.js';
 import { sharedMemory } from '../agents/shared-memory.js';
 
 const router = Router();
 
 // ── Merchant Authentication Middleware ──────────────────────────────────────────
+
+interface MerchantAuthPayload {
+  merchantId?: string;
+  role?: string;
+}
 
 function verifyMerchantAuth(req: Request, res: Response, next: Function): void {
   const merchantToken = req.headers['x-merchant-token'] as string;
@@ -18,13 +24,18 @@ function verifyMerchantAuth(req: Request, res: Response, next: Function): void {
   // Internal service token (server-to-server)
   const tokenEnv = process.env.INTERNAL_SERVICE_TOKEN;
   const apiKeyEnv = process.env.MERCHANT_API_KEY;
+  const merchantJwtSecret = process.env.JWT_MERCHANT_SECRET;
+
   if (internalToken && tokenEnv && internalToken === tokenEnv) {
+    // Internal service has full access
+    (req as any).merchantAuth = { type: 'internal' };
     next();
     return;
   }
 
-  // API key auth
+  // API key auth — API keys have full access
   if (apiKey && apiKeyEnv && apiKey === apiKeyEnv) {
+    (req as any).merchantAuth = { type: 'api_key' };
     next();
     return;
   }
@@ -35,10 +46,77 @@ function verifyMerchantAuth(req: Request, res: Response, next: Function): void {
     return;
   }
 
-  // In production, validate the merchant token against your auth service
-  // For now, we require a properly formatted token (non-empty, min 16 chars)
-  if (merchantToken.length < 16) {
-    res.status(401).json({ error: 'Invalid merchant token format' });
+  // Validate merchant JWT token to extract merchantId for authorization
+  if (merchantJwtSecret && merchantToken.length > 20) {
+    try {
+      const decoded = jwt.verify(merchantToken, merchantJwtSecret, { algorithms: ['HS256'] }) as MerchantAuthPayload;
+      if (decoded.merchantId) {
+        (req as any).merchantAuth = {
+          type: 'merchant',
+          merchantId: decoded.merchantId,
+          role: decoded.role
+        };
+        next();
+        return;
+      }
+    } catch {
+      // Token verification failed, continue to legacy check
+    }
+  }
+
+  // Legacy check: require properly formatted token (non-empty, min 16 chars)
+  // SECURITY NOTE: This is a fallback for legacy merchant tokens that aren't JWTs.
+  // In production, all merchant tokens should be JWTs with embedded merchantId.
+  if (process.env.NODE_ENV === 'production') {
+    res.status(401).json({
+      error: 'Invalid merchant token. Merchant tokens must be JWTs containing merchantId claim.'
+    });
+    return;
+  }
+
+  // Development fallback (remove in production!)
+  (req as any).merchantAuth = { type: 'dev_fallback' };
+  next();
+}
+
+/**
+ * Middleware to verify the requesting merchant can access the requested merchantId
+ * Prevents IDOR attacks where Merchant A accesses Merchant B's data
+ */
+function authorizeMerchantAccess(req: Request, res: Response, next: Function): void {
+  const requestedMerchantId = req.params.merchantId;
+  const auth = (req as any).merchantAuth;
+
+  if (!requestedMerchantId) {
+    next();
+    return;
+  }
+
+  // Internal services and API keys have full access
+  if (auth?.type === 'internal' || auth?.type === 'api_key') {
+    next();
+    return;
+  }
+
+  // For merchant tokens, verify ownership
+  if (auth?.type === 'merchant') {
+    if (auth.merchantId !== requestedMerchantId) {
+      res.status(403).json({
+        error: 'Forbidden: You do not have access to this merchant\'s data'
+      });
+      return;
+    }
+  }
+
+  // Development fallback allows access (remove in production!)
+  if (auth?.type === 'dev_fallback' && process.env.NODE_ENV !== 'production') {
+    next();
+    return;
+  }
+
+  // If no merchantAuth context, reject
+  if (!auth) {
+    res.status(401).json({ error: 'Authentication required' });
     return;
   }
 
@@ -49,7 +127,7 @@ router.use(verifyMerchantAuth);
 
 // ── Demand Dashboard ────────────────────────────────────────────────────────────
 
-router.get('/:merchantId/demand/dashboard', async (req: Request, res: Response) => {
+router.get('/:merchantId/demand/dashboard', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category } = req.query;
 
@@ -97,7 +175,7 @@ router.get('/:merchantId/demand/dashboard', async (req: Request, res: Response) 
 
 // ── Demand Signal ─────────────────────────────────────────────────────────────
 
-router.get('/:merchantId/demand/signal', async (req: Request, res: Response) => {
+router.get('/:merchantId/demand/signal', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category = 'DINING' } = req.query;
 
@@ -165,7 +243,7 @@ router.get('/:merchantId/procurement', async (req: Request, res: Response) => {
 
 // ── Top Performing Intents ───────────────────────────────────────────────────────
 
-router.get('/:merchantId/intents/top', async (req: Request, res: Response) => {
+router.get('/:merchantId/intents/top', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category, limit = '20' } = req.query;
 
@@ -200,7 +278,7 @@ router.get('/:merchantId/intents/top', async (req: Request, res: Response) => {
 
 // ── Demand Trends ───────────────────────────────────────────────────────────────
 
-router.get('/:merchantId/trends', async (req: Request, res: Response) => {
+router.get('/:merchantId/trends', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category, period = '7d' } = req.query;
 
@@ -279,7 +357,7 @@ router.get('/:merchantId/trends', async (req: Request, res: Response) => {
 
 // ── City/Location Insights ──────────────────────────────────────────────────────
 
-router.get('/:merchantId/locations', async (req: Request, res: Response) => {
+router.get('/:merchantId/locations', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category, limit = '10' } = req.query;
 
@@ -325,7 +403,7 @@ router.get('/:merchantId/locations', async (req: Request, res: Response) => {
 
 // ── Price Expectations ─────────────────────────────────────────────────────────
 
-router.get('/:merchantId/pricing', async (req: Request, res: Response) => {
+router.get('/:merchantId/pricing', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category } = req.query;
 
@@ -383,7 +461,7 @@ router.get('/:merchantId/pricing', async (req: Request, res: Response) => {
 
 // ── Alerts Configuration ───────────────────────────────────────────────────────
 
-router.post('/:merchantId/alerts', async (req: Request, res: Response) => {
+router.post('/:merchantId/alerts', authorizeMerchantAccess, async (req: Request, res: Response) => {
   const { merchantId } = req.params;
   const { category, threshold, webhookUrl, enabled = true } = req.body;
 

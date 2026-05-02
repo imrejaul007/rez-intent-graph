@@ -351,6 +351,55 @@ router.get('/stats', verifyInternalToken, async (req: Request, res: Response) =>
   }
 });
 
+// ── ReZ Mind Insights ────────────────────────────────────────────────────────
+
+/**
+ * POST /api/intent/insights/generate
+ * Generate insights for a user based on their intent profile
+ */
+router.post('/insights/generate', verifyInternalToken, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const { generateInsights } = await import('../services/insightService.js');
+    const results = await generateInsights(userId);
+
+    res.json({
+      success: true,
+      data: {
+        count: results.length,
+        insights: results.map((r) => r.insight),
+        stored: results.filter((r) => r.stored).length,
+      },
+    });
+  } catch (error) {
+    console.error('[IntentAPI] Generate insights failed:', error);
+    res.status(500).json({ error: 'Failed to generate insights' });
+  }
+});
+
+/**
+ * GET /api/intent/insights/:userId
+ * Get existing insights for a user
+ */
+router.get('/insights/:userId', verifyInternalToken, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const { getInsights } = await import('../services/insightService.js');
+    const insights = await getInsights(userId);
+
+    res.json({ success: true, data: insights });
+  } catch (error) {
+    console.error('[IntentAPI] Get insights failed:', error);
+    res.status(500).json({ error: 'Failed to get insights' });
+  }
+});
+
 // ── Similarity Search ────────────────────────────────────────────────────────
 
 /**

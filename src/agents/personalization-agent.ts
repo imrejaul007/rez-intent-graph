@@ -6,12 +6,7 @@
 import { sharedMemory } from './shared-memory.js';
 import { actionExecutor } from './action-trigger.js';
 import type { AgentConfig, AgentResult, UserResponseProfile } from './types.js';
-
-const logger = {
-  info: (msg: string, meta?: Record<string, unknown>) => console.log(`[PersonalizationAgent] ${msg}`, meta || ''),
-  warn: (msg: string, meta?: Record<string, unknown>) => console.warn(`[PersonalizationAgent] ${msg}`, meta || ''),
-  error: (msg: string, meta?: Record<string, unknown>) => console.error(`[PersonalizationAgent] ${msg}`, meta || ''),
-};
+import { log } from '../utils/logger.js';
 
 // ── Agent Configuration ────────────────────────────────────────────────────────
 
@@ -250,7 +245,7 @@ export async function selectOptimalVariant(
 // ── Event Processing ─────────────────────────────────────────────────────────────
 
 export async function processNudgeEvent(event: NudgeEvent): Promise<void> {
-  logger.info('Processing nudge event', { userId: event.userId, type: event.eventType });
+  log.info('[PersonalizationAgent] Processing nudge event', { userId: event.userId, type: event.eventType });
 
   // Store event in sharedMemory
   await sharedMemory.set(`nudge:${event.userId}:${event.nudgeId}:${event.eventType}`, {
@@ -263,7 +258,7 @@ export async function processNudgeEvent(event: NudgeEvent): Promise<void> {
 
   // Update profile asynchronously (non-blocking)
   buildUserProfile(event.userId).catch((err) => {
-    logger.error('Failed to update user profile', { userId: event.userId, error: err });
+    log.error('[PersonalizationAgent] Failed to update user profile', { userId: event.userId, error: err });
   });
 
   // Update trending intents on conversion
@@ -298,7 +293,7 @@ async function triggerPersonalizationAction(event: NudgeEvent): Promise<void> {
 
     // Auto-pause low-performing channels
     if (convertRate < 0.02 && clickRate < 0.05) {
-      logger.info('[PersonalizationAgent] DANGEROUS: Auto-pausing low-performing channel', {
+      log.warn('[PersonalizationAgent] DANGEROUS: Auto-pausing low-performing channel', {
         userId: event.userId,
         channel,
         convertRate,
@@ -384,7 +379,7 @@ export async function analyzeABTestResults(): Promise<void> {
 
     // DANGEROUS: Auto-adopt winning variant
     if (bestRate > 0.05) {
-      logger.info('[PersonalizationAgent] DANGEROUS: Adopting winning variant', {
+      log.warn('[PersonalizationAgent] DANGEROUS: Adopting winning variant', {
         channel,
         variantId: bestVariant.variantId,
         rate: bestRate,
@@ -418,7 +413,7 @@ export async function runPersonalizationAgent(): Promise<AgentResult> {
   const start = Date.now();
 
   try {
-    logger.info('Running personalization update');
+    log.info('[PersonalizationAgent] Running personalization update');
 
     // Process any pending nudge events stored in sharedMemory
     const pendingEventKeys = await sharedMemory.keys('nudge:*:pending');
@@ -452,7 +447,7 @@ export async function runPersonalizationAgent(): Promise<AgentResult> {
       await sharedMemory.delete(`nudge:${event.userId}:${event.nudgeId}:pending`);
     }
 
-    logger.info('Personalization update complete', { events: pendingEvents.length });
+    log.info('[PersonalizationAgent] Personalization update complete', { events: pendingEvents.length });
 
     return {
       agent: 'personalization-agent',
@@ -461,7 +456,7 @@ export async function runPersonalizationAgent(): Promise<AgentResult> {
       data: { events: pendingEvents.length },
     };
   } catch (error) {
-    logger.error('Personalization update failed', { error });
+    log.error('[PersonalizationAgent] Personalization update failed', { error });
     return {
       agent: 'personalization-agent',
       success: false,
@@ -487,12 +482,12 @@ let cronInterval: NodeJS.Timeout | null = null;
 export function startPersonalizationCron(): void {
   if (cronInterval) return;
 
-  logger.info('Starting personalization agent', { intervalMs: personalizationAgentConfig.intervalMs });
+  log.info('[PersonalizationAgent] Starting personalization agent', { intervalMs: personalizationAgentConfig.intervalMs });
 
-  runPersonalizationAgent().catch((err) => logger.error('Personalization cron failed', { error: err }));
+  runPersonalizationAgent().catch((err) => log.error('[PersonalizationAgent] Cron failed', { error: err }));
 
   cronInterval = setInterval(
-    () => runPersonalizationAgent().catch((err) => logger.error('Personalization cron failed', { error: err })),
+    () => runPersonalizationAgent().catch((err) => log.error('[PersonalizationAgent] Cron failed', { error: err })),
     personalizationAgentConfig.intervalMs
   );
 }

@@ -3,6 +3,7 @@
 // Prevents cascading failures across the ecosystem
 
 import { Request, Response } from 'express';
+import { log } from '../utils/logger.js';
 
 type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -121,7 +122,10 @@ class CircuitBreaker {
 
   private transitionTo(state: CircuitState): void {
     const metrics = this.getMetrics();
-    console.log(`[CircuitBreaker:${this.options.name}] ${metrics.state} -> ${state}`);
+    log.info(`[CircuitBreaker:${this.options.name}] State transition`, {
+      from: metrics.state,
+      to: state
+    });
     metrics.state = state;
     metrics.lastStateChange = Date.now();
 
@@ -158,7 +162,7 @@ export function withCircuitBreaker(serviceName: string, options?: Omit<CircuitBr
   ): Promise<T> => {
     if (!breaker.canExecute()) {
       if (fallback) {
-        console.warn(`[CircuitBreaker:${serviceName}] Circuit OPEN, using fallback`);
+        log.warn(`[CircuitBreaker:${serviceName}] Circuit OPEN, using fallback`);
         return fallback();
       }
       throw new CircuitOpenError(serviceName);
