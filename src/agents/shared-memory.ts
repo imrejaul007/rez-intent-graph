@@ -30,7 +30,7 @@ interface IORedisInstance {
   status: string;
   connect(): Promise<void>;
   disconnect(): void;
-  on(event: string, handler: (arg?: unknown) => void): void;
+  on(event: string, handler: (...args: unknown[]) => void): void;
   zremrangebyscore(key: string, min: number, max: number): Promise<number>;
   zcard(key: string): Promise<number>;
   zadd(key: string, score: number, member: string): Promise<number>;
@@ -46,7 +46,7 @@ interface IORedisInstance {
   publish(channel: string, message: string): Promise<number>;
   subscribe(channel: string): Promise<number>;
   duplicate(): IORedisInstance;
-  removeListener(event: string, handler: (arg?: unknown) => void): void;
+  removeListener(event: string, handler: (...args: unknown[]) => void): void;
 }
 
 // Try to load IORedis, fall back to null if not available
@@ -580,11 +580,13 @@ export class SharedMemory {
         logger.warn('[Redis] Subscribe failed:', err.message);
       });
 
-      redis.on('message', (ch: string, msg: string) => {
-        if (ch === channel) {
+      redis.on('message', (ch: string | Buffer, msg: string | Buffer) => {
+        const channel = String(ch);
+        const msgStr = String(msg);
+        if (channel === ch) {
           try {
-            const message = JSON.parse(msg) as AgentMessage;
-            callback(message);
+            const parsed = JSON.parse(msgStr) as AgentMessage;
+            callback(parsed);
           } catch (err) {
             logger.error('Failed to parse Redis message', { error: err, channel });
           }
