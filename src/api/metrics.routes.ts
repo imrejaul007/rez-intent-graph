@@ -117,10 +117,10 @@ router.get('/', async (_req: Request, res: Response) => {
 router.get('/dashboard', async (_req: Request, res: Response) => {
   try {
     const metrics = await getDashboardMetrics();
-    res.json(metrics);
+    res.json({ success: true, data: metrics });
   } catch (error) {
     console.error('[Metrics] Dashboard export failed:', error);
-    res.status(500).json({ error: 'Failed to export metrics' });
+    res.status(500).json({ success: false, message: 'Failed to export metrics' });
   }
 });
 

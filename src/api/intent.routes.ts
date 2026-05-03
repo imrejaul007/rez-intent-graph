@@ -23,7 +23,7 @@ router.post('/capture', verifyInternalToken, captureLimiter, async (req: Request
     const { userId, appType, intentKey, eventType, category, intentQuery, metadata, merchantId } = req.body;
 
     if (!userId || !appType || !intentKey || !eventType || !category) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
     const result = await intentCaptureService.capture({
@@ -40,7 +40,7 @@ router.post('/capture', verifyInternalToken, captureLimiter, async (req: Request
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('[IntentAPI] Capture failed:', error);
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 });
 
@@ -54,10 +54,10 @@ router.get('/active/:userId', verifyInternalToken, async (req: Request, res: Res
   try {
     const { userId } = req.params;
     const intents = await intentCaptureService.getActiveIntents(userId);
-    res.json(intents);
+    res.json({ success: true, data: intents });
   } catch (error) {
     console.error('[IntentAPI] Get active intents failed:', error);
-    res.status(500).json({ error: 'Failed to get active intents' });
+    res.status(500).json({ success: false, message: 'Failed to get active intents' });
   }
 });
 
@@ -71,10 +71,10 @@ router.get('/user/:userId', verifyInternalToken, async (req: Request, res: Respo
   try {
     const { userId } = req.params;
     const intents = await intentCaptureService.getUserIntents(userId);
-    res.json(intents);
+    res.json({ success: true, data: intents });
   } catch (error) {
     console.error('[IntentAPI] Get user intents failed:', error);
-    res.status(500).json({ error: 'Failed to get user intents' });
+    res.status(500).json({ success: false, message: 'Failed to get user intents' });
   }
 });
 
@@ -88,10 +88,10 @@ router.get('/dormant/:userId', verifyInternalToken, async (req: Request, res: Re
   try {
     const { userId } = req.params;
     const dormantIntents = await dormantIntentService.getUserDormantIntents(userId);
-    res.json(dormantIntents);
+    res.json({ success: true, data: dormantIntents });
   } catch (error) {
     console.error('[IntentAPI] Get dormant intents failed:', error);
-    res.status(500).json({ error: 'Failed to get dormant intents' });
+    res.status(500).json({ success: false, message: 'Failed to get dormant intents' });
   }
 });
 
@@ -105,10 +105,10 @@ router.get('/profile/:userId', verifyInternalToken, async (req: Request, res: Re
   try {
     const { userId } = req.params;
     const profile = await crossAppAggregationService.getProfile(userId);
-    res.json(profile);
+    res.json({ success: true, data: profile });
   } catch (error) {
     console.error('[IntentAPI] Get profile failed:', error);
-    res.status(500).json({ error: 'Failed to get profile' });
+    res.status(500).json({ success: false, message: 'Failed to get profile' });
   }
 });
 
@@ -122,10 +122,10 @@ router.get('/enriched/:userId', verifyInternalToken, async (req: Request, res: R
   try {
     const { userId } = req.params;
     const context = await crossAppAggregationService.getEnrichedContext(userId);
-    res.json(context);
+    res.json({ success: true, data: context });
   } catch (error) {
     console.error('[IntentAPI] Get enriched context failed:', error);
-    res.status(500).json({ error: 'Failed to get enriched context' });
+    res.status(500).json({ success: false, message: 'Failed to get enriched context' });
   }
 });
 
@@ -140,7 +140,7 @@ router.post('/revival', verifyInternalToken, async (req: Request, res: Response)
     const { dormantIntentId, triggerType } = req.body;
 
     if (!dormantIntentId || !triggerType) {
-      return res.status(400).json({ error: 'dormantIntentId and triggerType are required' });
+      return res.status(400).json({ success: false, message: 'dormantIntentId and triggerType are required' });
     }
 
     const candidate = await dormantIntentService.triggerRevival(
@@ -149,13 +149,13 @@ router.post('/revival', verifyInternalToken, async (req: Request, res: Response)
     );
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Dormant intent not found or not eligible for revival' });
+      return res.status(404).json({ success: false, message: 'Dormant intent not found or not eligible for revival' });
     }
 
     res.json({ success: true, data: candidate });
   } catch (error) {
     console.error('[IntentAPI] Trigger revival failed:', error);
-    res.status(500).json({ error: 'Failed to trigger revival' });
+    res.status(500).json({ success: false, message: 'Failed to trigger revival' });
   }
 });
 
@@ -172,7 +172,7 @@ router.post('/revived/:dormantIntentId', verifyInternalToken, async (req: Reques
     res.json({ success: true });
   } catch (error) {
     console.error('[IntentAPI] Mark revived failed:', error);
-    res.status(500).json({ error: 'Failed to mark as revived' });
+    res.status(500).json({ success: false, message: 'Failed to mark as revived' });
   }
 });
 
@@ -185,10 +185,10 @@ router.post('/revived/:dormantIntentId', verifyInternalToken, async (req: Reques
 router.get('/scheduled-revivals', verifyInternalToken, async (req: Request, res: Response) => {
   try {
     const candidates = await dormantIntentService.getScheduledRevivals();
-    res.json(candidates);
+    res.json({ success: true, data: candidates });
   } catch (error) {
     console.error('[IntentAPI] Get scheduled revivals failed:', error);
-    res.status(500).json({ error: 'Failed to get scheduled revivals' });
+    res.status(500).json({ success: false, message: 'Failed to get scheduled revivals' });
   }
 });
 
@@ -205,7 +205,7 @@ router.post('/pause/:dormantIntentId', verifyInternalToken, async (req: Request,
     res.json({ success: true });
   } catch (error) {
     console.error('[IntentAPI] Pause nudges failed:', error);
-    res.status(500).json({ error: 'Failed to pause nudges' });
+    res.status(500).json({ success: false, message: 'Failed to pause nudges' });
   }
 });
 
@@ -220,10 +220,10 @@ router.get('/merchant-demand/:merchantId', verifyInternalToken, async (req: Requ
     const { merchantId } = req.params;
     const category = (req.query.category as string) || 'DINING';
     const demand = await crossAppAggregationService.aggregateMerchantDemand(merchantId, category);
-    res.json(demand);
+    res.json({ success: true, data: demand });
   } catch (error) {
     console.error('[IntentAPI] Get merchant demand failed:', error);
-    res.status(500).json({ error: 'Failed to get merchant demand' });
+    res.status(500).json({ success: false, message: 'Failed to get merchant demand' });
   }
 });
 
@@ -237,10 +237,10 @@ router.get('/affinities/:userId', verifyInternalToken, async (req: Request, res:
   try {
     const { userId } = req.params;
     const affinities = await crossAppAggregationService.getUserAffinities(userId);
-    res.json(affinities);
+    res.json({ success: true, data: affinities });
   } catch (error) {
     console.error('[IntentAPI] Get affinities failed:', error);
-    res.status(500).json({ error: 'Failed to get affinities' });
+    res.status(500).json({ success: false, message: 'Failed to get affinities' });
   }
 });
 
@@ -256,7 +256,7 @@ router.post('/cron/detect-dormant', verifyCronSecret, async (req: Request, res: 
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('[IntentAPI] Detect dormant failed:', error);
-    res.status(500).json({ error: 'Failed to detect dormant intents' });
+    res.status(500).json({ success: false, message: 'Failed to detect dormant intents' });
   }
 });
 
@@ -272,7 +272,7 @@ router.post('/cron/update-scores', verifyCronSecret, async (req: Request, res: R
     res.json({ success: true, data: { updated } });
   } catch (error) {
     console.error('[IntentAPI] Update scores failed:', error);
-    res.status(500).json({ error: 'Failed to update revival scores' });
+    res.status(500).json({ success: false, message: 'Failed to update revival scores' });
   }
 });
 
@@ -287,7 +287,7 @@ router.post('/nudge/send', verifyInternalToken, nudgeLimiter, async (req: Reques
     const { userId, intentKey, message, channel = 'push' } = req.body;
 
     if (!userId || !intentKey) {
-      return res.status(400).json({ error: 'userId and intentKey are required' });
+      return res.status(400).json({ success: false, message: 'userId and intentKey are required' });
     }
 
     // Find dormant intent
@@ -304,10 +304,10 @@ router.post('/nudge/send', verifyInternalToken, nudgeLimiter, async (req: Reques
       await dormantIntentService.recordNudgeSent(match._id.toString());
     }
 
-    res.json({ success: true, intentKey, channel });
+    res.json({ success: true, data: { intentKey, channel } });
   } catch (error) {
     console.error('[IntentAPI] Send nudge failed:', error);
-    res.status(500).json({ error: 'Failed to send nudge' });
+    res.status(500).json({ success: false, message: 'Failed to send nudge' });
   }
 });
 
@@ -321,10 +321,10 @@ router.get('/nudge/history/:userId', verifyInternalToken, async (req: Request, r
     const nudges = await Nudge.find({ userId })
       .sort({ createdAt: -1 })
       .limit(50);
-    res.json(nudges);
+    res.json({ success: true, data: nudges });
   } catch (error) {
     console.error('[IntentAPI] Get nudge history failed:', error);
-    res.status(500).json({ error: 'Failed to get nudge history' });
+    res.status(500).json({ success: false, message: 'Failed to get nudge history' });
   }
 });
 
@@ -341,13 +341,16 @@ router.get('/stats', verifyInternalToken, async (req: Request, res: Response) =>
     const dormantCount = await Intent.countDocuments({ status: 'DORMANT' });
 
     res.json({
-      totalIntents: intentCount,
-      dormantIntents: dormantCount,
-      ...summary,
+      success: true,
+      data: {
+        totalIntents: intentCount,
+        dormantIntents: dormantCount,
+        ...summary,
+      },
     });
   } catch (error) {
     console.error('[IntentAPI] Get stats failed:', error);
-    res.status(500).json({ error: 'Failed to get stats' });
+    res.status(500).json({ success: false, message: 'Failed to get stats' });
   }
 });
 
@@ -362,7 +365,7 @@ router.post('/insights/generate', verifyInternalToken, async (req: Request, res:
     const { userId } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+      return res.status(400).json({ success: false, message: 'userId is required' });
     }
 
     const { generateInsights } = await import('../services/insightService.js');
@@ -378,7 +381,7 @@ router.post('/insights/generate', verifyInternalToken, async (req: Request, res:
     });
   } catch (error) {
     console.error('[IntentAPI] Generate insights failed:', error);
-    res.status(500).json({ error: 'Failed to generate insights' });
+    res.status(500).json({ success: false, message: 'Failed to generate insights' });
   }
 });
 
@@ -396,7 +399,7 @@ router.get('/insights/:userId', verifyInternalToken, async (req: Request, res: R
     res.json({ success: true, data: insights });
   } catch (error) {
     console.error('[IntentAPI] Get insights failed:', error);
-    res.status(500).json({ error: 'Failed to get insights' });
+    res.status(500).json({ success: false, message: 'Failed to get insights' });
   }
 });
 
@@ -412,7 +415,7 @@ router.get('/similar', verifyInternalToken, async (req: Request, res: Response) 
     const { userId, intentKey, category, limit } = req.query;
 
     if (!userId || !intentKey) {
-      return res.status(400).json({ error: 'userId and intentKey are required' });
+      return res.status(400).json({ success: false, message: 'userId and intentKey are required' });
     }
 
     const results = await intentCaptureService.findSimilarIntents(
@@ -425,7 +428,7 @@ router.get('/similar', verifyInternalToken, async (req: Request, res: Response) 
     res.json({ success: true, data: results });
   } catch (error) {
     console.error('[IntentAPI] Find similar failed:', error);
-    res.status(500).json({ error: 'Failed to find similar intents' });
+    res.status(500).json({ success: false, message: 'Failed to find similar intents' });
   }
 });
 
@@ -439,7 +442,7 @@ router.get('/recommendations', verifyInternalToken, async (req: Request, res: Re
     const { userId, category, limit } = req.query;
 
     if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+      return res.status(400).json({ success: false, message: 'userId is required' });
     }
 
     const recommendations = await intentCaptureService.getRecommendations(
@@ -451,7 +454,7 @@ router.get('/recommendations', verifyInternalToken, async (req: Request, res: Re
     res.json({ success: true, data: { recommendations } });
   } catch (error) {
     console.error('[IntentAPI] Get recommendations failed:', error);
-    res.status(500).json({ error: 'Failed to get recommendations' });
+    res.status(500).json({ success: false, message: 'Failed to get recommendations' });
   }
 });
 
@@ -465,7 +468,7 @@ router.get('/similar/global', verifyInternalToken, async (req: Request, res: Res
     const { intentKey, category, limit } = req.query;
 
     if (!intentKey) {
-      return res.status(400).json({ error: 'intentKey is required' });
+      return res.status(400).json({ success: false, message: 'intentKey is required' });
     }
 
     const { vectorSimilarityService } = await import('../services/VectorSimilarityService.js');
@@ -478,7 +481,7 @@ router.get('/similar/global', verifyInternalToken, async (req: Request, res: Res
     res.json({ success: true, data: results });
   } catch (error) {
     console.error('[IntentAPI] Find global similar failed:', error);
-    res.status(500).json({ error: 'Failed to find global similar intents' });
+    res.status(500).json({ success: false, message: 'Failed to find global similar intents' });
   }
 });
 

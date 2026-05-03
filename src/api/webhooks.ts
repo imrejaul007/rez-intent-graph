@@ -44,14 +44,14 @@ function verifyWebhookSecret(req: Request): boolean {
  */
 export async function handleHotelSearch(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { userId, hotelId, city, checkIn, checkout, guests } = req.body;
 
   if (!userId) {
-    res.status(400).json({ error: 'userId is required' });
+    res.status(400).json({ success: false, message: 'userId is required' });
     return;
   }
 
@@ -69,7 +69,7 @@ export async function handleHotelSearch(req: Request, res: Response): Promise<vo
     res.json({ success: true });
   } catch (error) {
     logger.error('[Webhook] Hotel search capture failed', { error });
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 }
 
@@ -79,14 +79,14 @@ export async function handleHotelSearch(req: Request, res: Response): Promise<vo
  */
 export async function handleHotelHold(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { userId, hotelId, roomTypeId, checkIn, checkout } = req.body;
 
   if (!userId || !hotelId) {
-    res.status(400).json({ error: 'userId and hotelId are required' });
+    res.status(400).json({ success: false, message: 'userId and hotelId are required' });
     return;
   }
 
@@ -103,7 +103,7 @@ export async function handleHotelHold(req: Request, res: Response): Promise<void
     res.json({ success: true });
   } catch (error) {
     logger.error('[Webhook] Hotel hold capture failed', { error });
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 }
 
@@ -113,14 +113,14 @@ export async function handleHotelHold(req: Request, res: Response): Promise<void
  */
 export async function handleHotelConfirm(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { userId, hotelId, bookingId } = req.body;
 
   if (!userId || !hotelId) {
-    res.status(400).json({ error: 'userId and hotelId are required' });
+    res.status(400).json({ success: false, message: 'userId and hotelId are required' });
     return;
   }
 
@@ -144,10 +144,10 @@ export async function handleHotelConfirm(req: Request, res: Response): Promise<v
       }
     }
 
-    res.json({ success: true, revived: result.intent.status === 'FULFILLED' });
+    res.json({ success: true, data: { revived: result.intent.status === 'FULFILLED' } });
   } catch (error) {
     logger.error('[Webhook] Hotel confirm capture failed', { error });
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 }
 
@@ -159,14 +159,14 @@ export async function handleHotelConfirm(req: Request, res: Response): Promise<v
  */
 export async function handleRestaurantView(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { userId, merchantId, storeSlug, category } = req.body;
 
   if (!userId || !merchantId) {
-    res.status(400).json({ error: 'userId and merchantId are required' });
+    res.status(400).json({ success: false, message: 'userId and merchantId are required' });
     return;
   }
 
@@ -183,7 +183,7 @@ export async function handleRestaurantView(req: Request, res: Response): Promise
     res.json({ success: true });
   } catch (error) {
     logger.error('[Webhook] Restaurant view capture failed', { error });
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 }
 
@@ -193,14 +193,14 @@ export async function handleRestaurantView(req: Request, res: Response): Promise
  */
 export async function handleAddToCart(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { userId, merchantId, productId, productName } = req.body;
 
   if (!userId || !merchantId) {
-    res.status(400).json({ error: 'userId and merchantId are required' });
+    res.status(400).json({ success: false, message: 'userId and merchantId are required' });
     return;
   }
 
@@ -218,7 +218,7 @@ export async function handleAddToCart(req: Request, res: Response): Promise<void
     res.json({ success: true });
   } catch (error) {
     logger.error('[Webhook] Add to cart capture failed', { error });
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 }
 
@@ -228,14 +228,14 @@ export async function handleAddToCart(req: Request, res: Response): Promise<void
  */
 export async function handleOrderPlaced(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { userId, merchantId, orderId } = req.body;
 
   if (!userId || !merchantId) {
-    res.status(400).json({ error: 'userId and merchantId are required' });
+    res.status(400).json({ success: false, message: 'userId and merchantId are required' });
     return;
   }
 
@@ -262,7 +262,7 @@ export async function handleOrderPlaced(req: Request, res: Response): Promise<vo
     res.json({ success: true });
   } catch (error) {
     logger.error('[Webhook] Order capture failed', { error });
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ success: false, message: 'Failed to capture intent' });
   }
 }
 
@@ -274,14 +274,14 @@ export async function handleOrderPlaced(req: Request, res: Response): Promise<vo
  */
 export async function handleNudgeDelivered(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { nudgeId } = req.body;
 
   if (!nudgeId) {
-    res.status(400).json({ error: 'nudgeId is required' });
+    res.status(400).json({ success: false, message: 'nudgeId is required' });
     return;
   }
 
@@ -293,7 +293,7 @@ export async function handleNudgeDelivered(req: Request, res: Response): Promise
     res.json({ success: true, message: 'Nudge delivery recorded' });
   } catch (error) {
     logger.error('[Webhook] Nudge delivered update failed', { nudgeId, error });
-    res.status(500).json({ error: 'Failed to update nudge status' });
+    res.status(500).json({ success: false, message: 'Failed to update nudge status' });
   }
 }
 
@@ -303,14 +303,14 @@ export async function handleNudgeDelivered(req: Request, res: Response): Promise
  */
 export async function handleNudgeClicked(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { nudgeId } = req.body;
 
   if (!nudgeId) {
-    res.status(400).json({ error: 'nudgeId is required' });
+    res.status(400).json({ success: false, message: 'nudgeId is required' });
     return;
   }
 
@@ -322,7 +322,7 @@ export async function handleNudgeClicked(req: Request, res: Response): Promise<v
     res.json({ success: true, message: 'Nudge click recorded' });
   } catch (error) {
     logger.error('[Webhook] Nudge clicked update failed', { nudgeId, error });
-    res.status(500).json({ error: 'Failed to update nudge status' });
+    res.status(500).json({ success: false, message: 'Failed to update nudge status' });
   }
 }
 
@@ -332,14 +332,14 @@ export async function handleNudgeClicked(req: Request, res: Response): Promise<v
  */
 export async function handleNudgeConverted(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { nudgeId, dormantIntentId } = req.body;
 
   if (!nudgeId) {
-    res.status(400).json({ error: 'nudgeId is required' });
+    res.status(400).json({ success: false, message: 'nudgeId is required' });
     return;
   }
 
@@ -354,7 +354,7 @@ export async function handleNudgeConverted(req: Request, res: Response): Promise
     res.json({ success: true, message: 'Nudge conversion recorded' });
   } catch (error) {
     logger.error('[Webhook] Record conversion failed', { error });
-    res.status(500).json({ error: 'Failed to record conversion' });
+    res.status(500).json({ success: false, message: 'Failed to record conversion' });
   }
 }
 
@@ -366,14 +366,14 @@ export async function handleNudgeConverted(req: Request, res: Response): Promise
  */
 export async function handleBatchCapture(req: Request, res: Response): Promise<void> {
   if (!verifyWebhookSecret(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized' });
     return;
   }
 
   const { events } = req.body;
 
   if (!Array.isArray(events)) {
-    res.status(400).json({ error: 'events array is required' });
+    res.status(400).json({ success: false, message: 'events array is required' });
     return;
   }
 
@@ -400,5 +400,5 @@ export async function handleBatchCapture(req: Request, res: Response): Promise<v
   const successCount = results.filter((r) => r.success).length;
   logger.info('[Webhook] Batch capture completed', { total: events.length, success: successCount });
 
-  res.json({ success: true, results });
+  res.json({ success: true, data: { results } });
 }

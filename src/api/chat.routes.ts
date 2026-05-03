@@ -26,7 +26,7 @@ router.post('/knowledge/merchant/:merchantId/entries', verifyInternalToken, asyn
   const { type, title, content, tags, metadata } = req.body;
 
   if (!type || !title || !content) {
-    res.status(400).json({ error: 'type, title, and content are required' });
+    res.status(400).json({ success: false, message: 'type, title, and content are required' });
     return;
   }
 
@@ -39,10 +39,10 @@ router.post('/knowledge/merchant/:merchantId/entries', verifyInternalToken, asyn
       tags,
       metadata,
     });
-    res.json({ success: true, entry });
+    res.json({ success: true, data: { entry } });
   } catch (error) {
     console.error('[KnowledgeAPI] Add entry failed:', error);
-    res.status(500).json({ error: 'Failed to add knowledge entry' });
+    res.status(500).json({ success: false, message: 'Failed to add knowledge entry' });
   }
 });
 
@@ -55,7 +55,7 @@ router.post('/knowledge/merchant/:merchantId/bulk', verifyInternalToken, async (
   const { entries } = req.body;
 
   if (!Array.isArray(entries)) {
-    res.status(400).json({ error: 'entries array is required' });
+    res.status(400).json({ success: false, message: 'entries array is required' });
     return;
   }
 
@@ -64,10 +64,10 @@ router.post('/knowledge/merchant/:merchantId/bulk', verifyInternalToken, async (
       merchantId,
       entries,
     });
-    res.json({ success: true, ...result });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('[KnowledgeAPI] Bulk import failed:', error);
-    res.status(500).json({ error: 'Failed to bulk import' });
+    res.status(500).json({ success: false, message: 'Failed to bulk import' });
   }
 });
 
@@ -81,13 +81,13 @@ router.get('/knowledge/merchant/:merchantId', async (req: Request, res: Response
   try {
     const knowledgeBase = await merchantKnowledgeService.getKnowledgeBase(merchantId);
     if (!knowledgeBase) {
-      res.status(404).json({ error: 'Knowledge base not found' });
+      res.status(404).json({ success: false, message: 'Knowledge base not found' });
       return;
     }
-    res.json(knowledgeBase);
+    res.json({ success: true, data: knowledgeBase });
   } catch (error) {
     console.error('[KnowledgeAPI] Get knowledge base failed:', error);
-    res.status(500).json({ error: 'Failed to get knowledge base' });
+    res.status(500).json({ success: false, message: 'Failed to get knowledge base' });
   }
 });
 
@@ -100,7 +100,7 @@ router.get('/knowledge/merchant/:merchantId/search', async (req: Request, res: R
   const { q, type, limit } = req.query;
 
   if (!q) {
-    res.status(400).json({ error: 'q (query) is required' });
+    res.status(400).json({ success: false, message: 'q (query) is required' });
     return;
   }
 
@@ -111,10 +111,10 @@ router.get('/knowledge/merchant/:merchantId/search', async (req: Request, res: R
       category: type as string | undefined,
       limit: limit ? parseInt(limit as string) : 20,
     });
-    res.json({ results, count: results.length });
+    res.json({ success: true, data: { results, count: results.length } });
   } catch (error) {
     console.error('[KnowledgeAPI] Search failed:', error);
-    res.status(500).json({ error: 'Failed to search knowledge' });
+    res.status(500).json({ success: false, message: 'Failed to search knowledge' });
   }
 });
 
@@ -134,13 +134,13 @@ router.put('/knowledge/entries/:entryId', verifyInternalToken, async (req: Reque
       active,
     });
     if (!entry) {
-      res.status(404).json({ error: 'Entry not found' });
+      res.status(404).json({ success: false, message: 'Entry not found' });
       return;
     }
-    res.json({ success: true, entry });
+    res.json({ success: true, data: { entry } });
   } catch (error) {
     console.error('[KnowledgeAPI] Update entry failed:', error);
-    res.status(500).json({ error: 'Failed to update entry' });
+    res.status(500).json({ success: false, message: 'Failed to update entry' });
   }
 });
 
@@ -153,10 +153,10 @@ router.delete('/knowledge/entries/:entryId', verifyInternalToken, async (req: Re
 
   try {
     const success = await merchantKnowledgeService.deleteEntry(entryId);
-    res.json({ success });
+    res.json({ success: true });
   } catch (error) {
     console.error('[KnowledgeAPI] Delete entry failed:', error);
-    res.status(500).json({ error: 'Failed to delete entry' });
+    res.status(500).json({ success: false, message: 'Failed to delete entry' });
   }
 });
 
@@ -172,7 +172,7 @@ router.post('/chat/message', requireUserOrAuth, strictLimiter, async (req: Reque
   const { userId, merchantId, message, sessionId } = req.body;
 
   if (!userId || !message) {
-    res.status(400).json({ error: 'userId and message are required' });
+    res.status(400).json({ success: false, message: 'userId and message are required' });
     return;
   }
 
@@ -183,10 +183,10 @@ router.post('/chat/message', requireUserOrAuth, strictLimiter, async (req: Reque
       message,
       sessionId,
     });
-    res.json(response);
+    res.json({ success: true, data: response });
   } catch (error) {
     console.error('[ChatAPI] Process message failed:', error);
-    res.status(500).json({ error: 'Failed to process message' });
+    res.status(500).json({ success: false, message: 'Failed to process message' });
   }
 });
 
@@ -200,10 +200,10 @@ router.get('/chat/history/:userId', requireUserOrAuth, async (req: Request, res:
 
   try {
     const sessions = await autonomousChatService.getChatHistory(userId, limit ? parseInt(limit as string) : 10);
-    res.json({ sessions });
+    res.json({ success: true, data: { sessions } });
   } catch (error) {
     console.error('[ChatAPI] Get history failed:', error);
-    res.status(500).json({ error: 'Failed to get chat history' });
+    res.status(500).json({ success: false, message: 'Failed to get chat history' });
   }
 });
 
@@ -215,7 +215,7 @@ router.post('/chat/end-session', requireUserOrAuth, async (req: Request, res: Re
   const { sessionId } = req.body;
 
   if (!sessionId) {
-    res.status(400).json({ error: 'sessionId is required' });
+    res.status(400).json({ success: false, message: 'sessionId is required' });
     return;
   }
 
@@ -224,7 +224,7 @@ router.post('/chat/end-session', requireUserOrAuth, async (req: Request, res: Re
     res.json({ success: true });
   } catch (error) {
     console.error('[ChatAPI] End session failed:', error);
-    res.status(500).json({ error: 'Failed to end session' });
+    res.status(500).json({ success: false, message: 'Failed to end session' });
   }
 });
 
@@ -237,12 +237,12 @@ router.get('/chat/context/:userId', requireUserOrAuth, async (req: Request, res:
   const { merchantId, query } = req.query;
 
   if (!query) {
-    res.status(400).json({ error: 'query is required' });
+    res.status(400).json({ success: false, message: 'query is required' });
     return;
   }
 
   if (!merchantId) {
-    res.status(400).json({ error: 'merchantId is required' });
+    res.status(400).json({ success: false, message: 'merchantId is required' });
     return;
   }
 
@@ -252,10 +252,10 @@ router.get('/chat/context/:userId', requireUserOrAuth, async (req: Request, res:
       merchantId: merchantId as string,
       query: query as string,
     });
-    res.json(context);
+    res.json({ success: true, data: context });
   } catch (error) {
     console.error('[ChatAPI] Get context failed:', error);
-    res.status(500).json({ error: 'Failed to get chat context' });
+    res.status(500).json({ success: false, message: 'Failed to get chat context' });
   }
 });
 
@@ -272,14 +272,14 @@ router.post('/knowledge/merchant/:merchantId/menu', verifyInternalToken, async (
   const { items } = req.body;
 
   if (!Array.isArray(items)) {
-    res.status(400).json({ error: 'items array is required' });
+    res.status(400).json({ success: false, message: 'items array is required' });
     return;
   }
 
   const entries = items.map((item: { name: string; description: string; price?: number; category?: string }) => ({
     type: 'menu' as KnowledgeType,
     title: item.name,
-    content: `${item.description}${item.price ? ` - ₹${item.price}` : ''}`,
+    content: `${item.description}${item.price ? ` - Rs.${item.price}` : ''}`,
     tags: [item.category || 'menu', 'food', 'dish'],
   }));
 
@@ -288,10 +288,10 @@ router.post('/knowledge/merchant/:merchantId/menu', verifyInternalToken, async (
       merchantId,
       entries,
     });
-    res.json({ success: true, ...result });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('[KnowledgeAPI] Menu upload failed:', error);
-    res.status(500).json({ error: 'Failed to upload menu' });
+    res.status(500).json({ success: false, message: 'Failed to upload menu' });
   }
 });
 
@@ -304,7 +304,7 @@ router.post('/knowledge/merchant/:merchantId/policy', verifyInternalToken, async
   const { policies } = req.body;
 
   if (!Array.isArray(policies)) {
-    res.status(400).json({ error: 'policies array is required' });
+    res.status(400).json({ success: false, message: 'policies array is required' });
     return;
   }
 
@@ -320,10 +320,10 @@ router.post('/knowledge/merchant/:merchantId/policy', verifyInternalToken, async
       merchantId,
       entries,
     });
-    res.json({ success: true, ...result });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('[KnowledgeAPI] Policy upload failed:', error);
-    res.status(500).json({ error: 'Failed to upload policies' });
+    res.status(500).json({ success: false, message: 'Failed to upload policies' });
   }
 });
 
@@ -336,7 +336,7 @@ router.post('/knowledge/merchant/:merchantId/faq', verifyInternalToken, async (r
   const { faqs } = req.body;
 
   if (!Array.isArray(faqs)) {
-    res.status(400).json({ error: 'faqs array is required' });
+    res.status(400).json({ success: false, message: 'faqs array is required' });
     return;
   }
 
@@ -352,10 +352,10 @@ router.post('/knowledge/merchant/:merchantId/faq', verifyInternalToken, async (r
       merchantId,
       entries,
     });
-    res.json({ success: true, ...result });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('[KnowledgeAPI] FAQ upload failed:', error);
-    res.status(500).json({ error: 'Failed to upload FAQs' });
+    res.status(500).json({ success: false, message: 'Failed to upload FAQs' });
   }
 });
 

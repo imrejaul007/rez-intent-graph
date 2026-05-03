@@ -42,7 +42,7 @@ function verifyMerchantAuth(req: Request, res: Response, next: Function): void {
 
   // Merchant token auth — require both header presence AND non-empty value
   if (!merchantToken || merchantToken.trim() === '') {
-    res.status(401).json({ error: 'Authentication required. Provide x-internal-token, x-api-key, or x-merchant-token header.' });
+    res.status(401).json({ success: false, message: 'Authentication required. Provide x-internal-token, x-api-key, or x-merchant-token header.' });
     return;
   }
 
@@ -69,7 +69,7 @@ function verifyMerchantAuth(req: Request, res: Response, next: Function): void {
   // In production, all merchant tokens should be JWTs with embedded merchantId.
   if (process.env.NODE_ENV === 'production') {
     res.status(401).json({
-      error: 'Invalid merchant token. Merchant tokens must be JWTs containing merchantId claim.'
+      success: false, message: 'Invalid merchant token. Merchant tokens must be JWTs containing merchantId claim.'
     });
     return;
   }
@@ -102,7 +102,7 @@ function authorizeMerchantAccess(req: Request, res: Response, next: Function): v
   if (auth?.type === 'merchant') {
     if (auth.merchantId !== requestedMerchantId) {
       res.status(403).json({
-        error: 'Forbidden: You do not have access to this merchant\'s data'
+        success: false, message: 'Forbidden: You do not have access to this merchant\'s data'
       });
       return;
     }
@@ -116,7 +116,7 @@ function authorizeMerchantAccess(req: Request, res: Response, next: Function): v
 
   // If no merchantAuth context, reject
   if (!auth) {
-    res.status(401).json({ error: 'Authentication required' });
+    res.status(401).json({ success: false, message: 'Authentication required' });
     return;
   }
 
@@ -166,10 +166,10 @@ router.get('/:merchantId/demand/dashboard', authorizeMerchantAccess, async (req:
       };
     }
 
-    res.json(dashboard);
+    res.json({ success: true, data: dashboard });
   } catch (error) {
     console.error('[MerchantAPI] Dashboard failed:', error);
-    res.status(500).json({ error: 'Failed to get dashboard' });
+    res.status(500).json({ success: false, message: 'Failed to get dashboard' });
   }
 });
 
@@ -181,10 +181,10 @@ router.get('/:merchantId/demand/signal', authorizeMerchantAccess, async (req: Re
 
   try {
     const signal = await MerchantDemandSignal.findOne({ merchantId, category: category as string });
-    res.json(signal);
+    res.json({ success: true, data: signal });
   } catch (error) {
     console.error('[MerchantAPI] Demand signal failed:', error);
-    res.status(500).json({ error: 'Failed to get demand signal' });
+    res.status(500).json({ success: false, message: 'Failed to get demand signal' });
   }
 });
 
@@ -227,17 +227,20 @@ router.get('/:merchantId/procurement', async (req: Request, res: Response) => {
     const seasonality = getSeasonalityForecast(category as string);
 
     res.json({
-      merchantId,
-      category: category,
-      totalMarketDemand: totalDemand,
-      avgUnmetDemand: avgUnmetDemand.toFixed(1),
-      gaps,
-      seasonality,
-      generatedAt: new Date().toISOString(),
+      success: true,
+      data: {
+        merchantId,
+        category: category,
+        totalMarketDemand: totalDemand,
+        avgUnmetDemand: avgUnmetDemand.toFixed(1),
+        gaps,
+        seasonality,
+        generatedAt: new Date().toISOString(),
+      },
     });
   } catch (error) {
     console.error('[MerchantAPI] Procurement failed:', error);
-    res.status(500).json({ error: 'Failed to get procurement signals' });
+    res.status(500).json({ success: false, message: 'Failed to get procurement signals' });
   }
 });
 
@@ -256,23 +259,26 @@ router.get('/:merchantId/intents/top', authorizeMerchantAccess, async (req: Requ
       .limit(parseInt(limit as string));
 
     res.json({
-      merchantId,
-      intents: intents.map((i) => ({
-        id: i._id.toString(),
-        intentKey: i.intentKey,
-        category: i.category,
-        confidence: i.confidence,
-        status: i.status,
-        signalCount: i.signals?.length || 0,
-        firstSeen: i.firstSeenAt,
-        lastSeen: i.lastSeenAt,
-        conversionPotential:
-          i.confidence > 0.7 ? 'high' : i.confidence > 0.4 ? 'medium' : 'low',
-      })),
+      success: true,
+      data: {
+        merchantId,
+        intents: intents.map((i) => ({
+          id: i._id.toString(),
+          intentKey: i.intentKey,
+          category: i.category,
+          confidence: i.confidence,
+          status: i.status,
+          signalCount: i.signals?.length || 0,
+          firstSeen: i.firstSeenAt,
+          lastSeen: i.lastSeenAt,
+          conversionPotential:
+            i.confidence > 0.7 ? 'high' : i.confidence > 0.4 ? 'medium' : 'low',
+        })),
+      },
     });
   } catch (error) {
     console.error('[MerchantAPI] Top intents failed:', error);
-    res.status(500).json({ error: 'Failed to get top intents' });
+    res.status(500).json({ success: false, message: 'Failed to get top intents' });
   }
 });
 
@@ -335,23 +341,26 @@ router.get('/:merchantId/trends', authorizeMerchantAccess, async (req: Request, 
       lastTrend < firstTrend * 0.9 ? 'declining' : 'stable';
 
     res.json({
-      merchantId,
-      category: category || 'all',
-      period,
-      dataPoints: trend.length,
-      summary: {
-        totalSignals,
-        avgPerBucket: avgSignals.toFixed(1),
-        trendDirection,
-        changePct: firstTrend > 0
-          ? (((lastTrend - firstTrend) / firstTrend) * 100).toFixed(1)
-          : '0',
+      success: true,
+      data: {
+        merchantId,
+        category: category || 'all',
+        period,
+        dataPoints: trend.length,
+        summary: {
+          totalSignals,
+          avgPerBucket: avgSignals.toFixed(1),
+          trendDirection,
+          changePct: firstTrend > 0
+            ? (((lastTrend - firstTrend) / firstTrend) * 100).toFixed(1)
+            : '0',
+        },
+        trend,
       },
-      trend,
     });
   } catch (error) {
     console.error('[MerchantAPI] Trends failed:', error);
-    res.status(500).json({ error: 'Failed to get trends' });
+    res.status(500).json({ success: false, message: 'Failed to get trends' });
   }
 });
 
@@ -389,15 +398,18 @@ router.get('/:merchantId/locations', authorizeMerchantAccess, async (req: Reques
       }));
 
     res.json({
-      merchantId,
-      category: category || 'all',
-      period: '30d',
-      totalIntents: intents.length,
-      locations: topCities,
+      success: true,
+      data: {
+        merchantId,
+        category: category || 'all',
+        period: '30d',
+        totalIntents: intents.length,
+        locations: topCities,
+      },
     });
   } catch (error) {
     console.error('[MerchantAPI] Locations failed:', error);
-    res.status(500).json({ error: 'Failed to get location insights' });
+    res.status(500).json({ success: false, message: 'Failed to get location insights' });
   }
 });
 
@@ -439,23 +451,26 @@ router.get('/:merchantId/pricing', authorizeMerchantAccess, async (req: Request,
       highConfidenceCount > 0 ? highConfidenceSum / highConfidenceCount : avgPrice;
 
     res.json({
-      merchantId,
-      category: category || 'all',
-      priceExpectations: {
-        avgPrice: avgPrice > 0 ? avgPrice.toFixed(2) : null,
-        avgHighIntentPrice: avgHighConfidencePrice > 0 ? avgHighConfidencePrice.toFixed(2) : null,
-        sampleSize: priceCount,
-        recommendation:
-          avgHighConfidencePrice > 0 && avgPrice > 0
-            ? avgHighConfidencePrice > avgPrice
-              ? 'Price point acceptable, consider premium positioning'
-              : 'Consider competitive pricing to capture high-intent users'
-            : 'Insufficient data for pricing recommendation',
+      success: true,
+      data: {
+        merchantId,
+        category: category || 'all',
+        priceExpectations: {
+          avgPrice: avgPrice > 0 ? avgPrice.toFixed(2) : null,
+          avgHighIntentPrice: avgHighConfidencePrice > 0 ? avgHighConfidencePrice.toFixed(2) : null,
+          sampleSize: priceCount,
+          recommendation:
+            avgHighConfidencePrice > 0 && avgPrice > 0
+              ? avgHighConfidencePrice > avgPrice
+                ? 'Price point acceptable, consider premium positioning'
+                : 'Consider competitive pricing to capture high-intent users'
+              : 'Insufficient data for pricing recommendation',
+        },
       },
     });
   } catch (error) {
     console.error('[MerchantAPI] Pricing failed:', error);
-    res.status(500).json({ error: 'Failed to get pricing insights' });
+    res.status(500).json({ success: false, message: 'Failed to get pricing insights' });
   }
 });
 
@@ -466,7 +481,7 @@ router.post('/:merchantId/alerts', authorizeMerchantAccess, async (req: Request,
   const { category, threshold, webhookUrl, enabled = true } = req.body;
 
   if (!threshold || threshold < 1 || threshold > 100) {
-    res.status(400).json({ error: 'Threshold must be between 1 and 100' });
+    res.status(400).json({ success: false, message: 'Threshold must be between 1 and 100' });
     return;
   }
 
@@ -486,10 +501,10 @@ router.post('/:merchantId/alerts', authorizeMerchantAccess, async (req: Request,
       86400 * 30
     );
 
-    res.json({ success: true, config: alertConfig });
+    res.json({ success: true, data: { config: alertConfig } });
   } catch (error) {
     console.error('[MerchantAPI] Alert config failed:', error);
-    res.status(500).json({ error: 'Failed to configure alert' });
+    res.status(500).json({ success: false, message: 'Failed to configure alert' });
   }
 });
 

@@ -81,10 +81,10 @@ router.get('/context/:userId', verifyInternalToken, async (req: Request, res: Re
       recommendations: generateRecommendations(activeIntents, dormantIntents),
     };
 
-    res.json(context);
+    res.json({ success: true, data: context });
   } catch (error) {
     console.error('[CommerceMemoryAPI] Get context failed:', error);
-    res.status(500).json({ error: 'Failed to get Commerce Memory context' });
+    res.status(500).json({ success: false, message: 'Failed to get Commerce Memory context' });
   }
 });
 
@@ -100,7 +100,7 @@ router.post('/revival/trigger', verifyInternalToken, async (req: Request, res: R
     const { userId, intentKey } = req.body;
 
     if (!userId || !intentKey) {
-      return res.status(400).json({ error: 'Missing userId or intentKey' });
+      return res.status(400).json({ success: false, message: 'Missing userId or intentKey' });
     }
 
     // Find dormant intent
@@ -111,13 +111,13 @@ router.post('/revival/trigger', verifyInternalToken, async (req: Request, res: R
     });
 
     if (!dormantIntent) {
-      return res.status(404).json({ error: 'Dormant intent not found' });
+      return res.status(404).json({ success: false, message: 'Dormant intent not found' });
     }
 
-    res.json({ success: true, dormantIntentId: dormantIntent._id.toString() });
+    res.json({ success: true, data: { dormantIntentId: dormantIntent._id.toString() } });
   } catch (error) {
     console.error('[CommerceMemoryAPI] Trigger revival failed:', error);
-    res.status(500).json({ error: 'Failed to trigger revival' });
+    res.status(500).json({ success: false, message: 'Failed to trigger revival' });
   }
 });
 
@@ -133,7 +133,7 @@ router.post('/offer/send', verifyInternalToken, strictLimiter, async (req: Reque
     const { userId, intentKey, offer } = req.body;
 
     if (!userId || !intentKey || !offer) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
     // Find dormant intent
@@ -144,13 +144,13 @@ router.post('/offer/send', verifyInternalToken, strictLimiter, async (req: Reque
     });
 
     if (!dormantIntent) {
-      return res.status(404).json({ error: 'Dormant intent not found' });
+      return res.status(404).json({ success: false, message: 'Dormant intent not found' });
     }
 
-    res.json({ success: true, offerSent: offer });
+    res.json({ success: true, data: { offerSent: offer } });
   } catch (error) {
     console.error('[CommerceMemoryAPI] Send offer failed:', error);
-    res.status(500).json({ error: 'Failed to send offer' });
+    res.status(500).json({ success: false, message: 'Failed to send offer' });
   }
 });
 
@@ -164,10 +164,10 @@ router.get('/enriched/:userId', verifyInternalToken, async (req: Request, res: R
   try {
     const { userId } = req.params;
     const context = await crossAppAggregationService.getEnrichedContext(userId);
-    res.json(context);
+    res.json({ success: true, data: context });
   } catch (error) {
     console.error('[CommerceMemoryAPI] Get enriched context failed:', error);
-    res.status(500).json({ error: 'Failed to get enriched context' });
+    res.status(500).json({ success: false, message: 'Failed to get enriched context' });
   }
 });
 

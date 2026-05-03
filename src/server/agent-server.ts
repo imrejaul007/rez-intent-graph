@@ -5,6 +5,7 @@ import 'dotenv/config';
 // Part of ReZ Mind - AI-powered commerce intelligence platform
 // DANGEROUS: Full autonomous mode with skip-permission capabilities
 
+import { log } from '../utils/logger.js';
 import express, { Request, Response, NextFunction } from 'express';
 import {
   getSwarmCoordinator,
@@ -72,10 +73,10 @@ const PORT = process.env.AGENT_PORT || 3005;
 
 // ── Dangerous Mode — only enable if explicitly configured ──────────────────────
 if (process.env.REZ_DANGEROUS_MODE === 'true') {
-  console.log('🚨 DANGEROUS MODE: Enabled via REZ_DANGEROUS_MODE env var');
+  log.info('🚨 DANGEROUS MODE: Enabled via REZ_DANGEROUS_MODE env var');
   enableDangerousMode();
 } else {
-  console.log('🛡️  Safe mode: dangerous mode disabled. Set REZ_DANGEROUS_MODE=true to enable.');
+  log.info('🛡️  Safe mode: dangerous mode disabled. Set REZ_DANGEROUS_MODE=true to enable.');
 }
 
 app.use(express.json());
@@ -95,7 +96,7 @@ app.use('/api', chatRouter);
 // ── Request logging ─────────────────────────────────────────────────────────────
 
 app.use((req: Request, _res: Response, next: NextFunction) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  log.info(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
@@ -360,7 +361,7 @@ app.post('/api/agent/cache/invalidate/:userId', (req: Request, res: Response) =>
 
 app.post('/api/autonomous/start', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
-    console.log('🚨 AUTONOMOUS MODE: Starting full autonomous operation');
+    log.info('🚨 AUTONOMOUS MODE: Starting full autonomous operation');
     await startAutonomousMode();
     const status = await getAutonomousOrchestrator().getStatus();
     res.json({
@@ -374,7 +375,7 @@ app.post('/api/autonomous/start', verifyInternalToken, async (_req: Request, res
       ],
     });
   } catch (error) {
-    console.error('❌ AUTONOMOUS MODE FAILED:', error);
+    log.error('❌ AUTONOMOUS MODE FAILED:', { error: String(error) });
     res.status(500).json({ error: String(error) });
   }
 });
@@ -383,14 +384,14 @@ app.post('/api/autonomous/start', verifyInternalToken, async (_req: Request, res
 
 app.post('/api/autonomous/stop', verifyInternalToken, async (_req: Request, res: Response) => {
   try {
-    console.log('🛑 AUTONOMOUS MODE: Stopping autonomous operation');
+    log.info('🛑 AUTONOMOUS MODE: Stopping autonomous operation');
     await stopAutonomousMode();
     res.json({
       success: true,
       message: 'Autonomous mode disabled',
     });
   } catch (error) {
-    console.error('❌ STOP AUTONOMOUS FAILED:', error);
+    log.error('❌ STOP AUTONOMOUS FAILED:', { error: String(error) });
     res.status(500).json({ error: String(error) });
   }
 });
@@ -408,7 +409,7 @@ app.post('/api/autonomous/action', verifyInternalToken, async (req: Request, res
   }
 
   try {
-    console.log(`🚨 AUTONOMOUS ACTION: ${actionType} by ${agentName}`);
+    log.info(`🚨 AUTONOMOUS ACTION: ${actionType} by ${agentName}`);
     const result = await executeAutonomousAction(actionType, payload || {});
     res.json({
       success: result,
@@ -418,7 +419,7 @@ app.post('/api/autonomous/action', verifyInternalToken, async (req: Request, res
       executedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`❌ AUTONOMOUS ACTION FAILED:`, error);
+    log.error(`❌ AUTONOMOUS ACTION FAILED:`, error);
     res.status(500).json({ error: String(error) });
   }
 });
@@ -448,7 +449,7 @@ app.post('/api/autonomous/emergency-stop', verifyInternalToken, async (req: Requ
   const reason = req.body?.reason || 'Manual emergency stop via API';
 
   try {
-    console.error(`🚨🚨🚨 EMERGENCY STOP TRIGGERED: ${reason}`);
+    log.error(`🚨🚨🚨 EMERGENCY STOP TRIGGERED: ${reason}`);
     emergencyStop();
     res.json({
       success: true,
@@ -456,7 +457,7 @@ app.post('/api/autonomous/emergency-stop', verifyInternalToken, async (req: Requ
       reason,
     });
   } catch (error) {
-    console.error('❌ EMERGENCY STOP FAILED:', error);
+    log.error('❌ EMERGENCY STOP FAILED:', { error: String(error) });
     res.status(500).json({ error: String(error) });
   }
 });
@@ -494,7 +495,7 @@ app.post('/api/autonomous/agents/stop', verifyInternalToken, async (_req: Reques
 // ── Error handler ──────────────────────────────────────────────────────────────
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Server Error]', err);
+  log.error('[Server Error]', { error: err.message, stack: err.stack });
   res.status(500).json({ error: err.message });
 });
 
@@ -652,7 +653,7 @@ app.post('/api/room-service/execute', async (req: Request, res: Response) => {
   }
 
   try {
-    console.log('[API] Executing room service flow', { guestId, roomNumber, hotelId });
+    log.info('[API] Executing room service flow', { guestId, roomNumber, hotelId });
     const result = await executeRoomServiceFlow(guestId, roomNumber, hotelId, items, complimentaryItems);
     res.json(result);
   } catch (error) {
@@ -669,7 +670,7 @@ app.post('/api/shopping/execute', async (req: Request, res: Response) => {
   }
 
   try {
-    console.log('[API] Executing shopping flow', { userId, storeId, merchantId });
+    log.info('[API] Executing shopping flow', { userId, storeId, merchantId });
     const result = await executeShoppingFlow(userId, storeId, merchantId, items);
     res.json(result);
   } catch (error) {
@@ -684,99 +685,99 @@ export function startAgentServer(): void {
 
   // Initialize event platform integration
   if (process.env.EVENT_PLATFORM_ENABLED !== 'false') {
-    console.log('[Agent Server] Initializing event platform integration...');
+    log.info('[Agent Server] Initializing event platform integration...');
     ensureEventPlatformInitialized();
   }
 
   const server = app.listen(PORT, () => {
     // Initialize WebSocket server
     wsServer.initialize(server);
-    console.log('[Agent Server] WebSocket server initialized on /ws');
-    console.log(`[Agent Server] Running on port ${PORT}`);
-    console.log('[Agent Server] Starting swarm coordinator...');
+    log.info('[Agent Server] WebSocket server initialized on /ws');
+    log.info(`[Agent Server] Running on port ${PORT}`);
+    log.info('[Agent Server] Starting swarm coordinator...');
 
     coordinator.start();
 
-    console.log('[Agent Server] Swarm coordinator started');
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  PHASE 7: MERCHANT KNOWLEDGE & AUTONOMOUS CHAT');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  MERCHANT KNOWLEDGE:');
-    console.log('  POST /api/knowledge/merchant/:id/entries  - Add knowledge entry');
-    console.log('  POST /api/knowledge/merchant/:id/bulk    - Bulk import');
-    console.log('  GET  /api/knowledge/merchant/:id         - Get knowledge base');
-    console.log('  GET  /api/knowledge/merchant/:id/search - Search knowledge');
-    console.log('  POST /api/knowledge/merchant/:id/menu    - Upload menu');
-    console.log('  POST /api/knowledge/merchant/:id/policy  - Upload policies');
-    console.log('  POST /api/knowledge/merchant/:id/faq     - Upload FAQs');
-    console.log('');
-    console.log('  AUTONOMOUS CHAT:');
-    console.log('  POST /api/chat/message           - Send chat message');
-    console.log('  GET  /api/chat/history/:userId  - Get chat history');
-    console.log('  POST /api/chat/end-session      - End chat session');
-    console.log('  GET  /api/chat/context/:userId  - Get chat context');
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  PHASE 6: REAL-TIME & MONITORING');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  WEBSOCKET: ws://localhost:' + PORT + '/ws');
-    console.log('  Channels: demand_signals, scarcity_alerts, nudge_events,');
-    console.log('           system_metrics, merchant_dashboard, user_intents');
-    console.log('');
-    console.log('  MONITORING:');
-    console.log('  GET  /api/monitoring/health           - Health check');
-    console.log('  GET  /api/monitoring/dashboard        - Dashboard metrics');
-    console.log('  GET  /api/monitoring/metrics         - All metrics');
-    console.log('  GET  /api/monitoring/alerts           - Active alerts');
-    console.log('  GET  /api/monitoring/websocket        - WS stats');
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  PHASE 5: MERCHANT DEMAND SIGNALS');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  MERCHANT DASHBOARD:');
-    console.log('  GET  /api/merchant/:id/demand/dashboard - Demand overview');
-    console.log('  GET  /api/merchant/:id/demand/signal   - Real-time signal');
-    console.log('  GET  /api/merchant/:id/procurement     - Procurement signals');
-    console.log('  GET  /api/merchant/:id/intents/top     - Top performing intents');
-    console.log('  GET  /api/merchant/:id/trends          - Demand trends');
-    console.log('  GET  /api/merchant/:id/locations       - City insights');
-    console.log('  GET  /api/merchant/:id/pricing        - Price expectations');
-    console.log('  POST /api/merchant/:id/alerts          - Configure alerts');
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  PHASE 4: AGENT OS INTEGRATION');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  GET  /api/agent/tools            - List available tools');
-    console.log('  POST /api/agent/tools/execute    - Execute agent tool');
-    console.log('  GET  /api/agent/intents/:userId  - Get active intents');
-    console.log('  GET  /api/agent/dormant/:userId - Get dormant intents');
-    console.log('  GET  /api/agent/enrich/:userId  - Get enriched context');
-    console.log('  POST /api/agent/insight         - Record agent insight');
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  PHASE 2: SERVICE INTEGRATION');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  SERVICE HEALTH: GET /api/services/health');
-    console.log('  WALLET: GET /api/wallet/:userId/balance');
-    console.log('  ORDERS: POST /api/orders/create');
-    console.log('  FLOWS: POST /api/room-service/execute, /api/shopping/execute');
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  AUTONOMOUS MODE (DANGEROUS)');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('  POST /api/autonomous/start    - Enable full autonomy');
-    console.log('  POST /api/autonomous/stop     - Disable autonomy');
-    console.log('  POST /api/autonomous/action   - Execute dangerous action');
-    console.log('═══════════════════════════════════════════════════════════════');
+    log.info('[Agent Server] Swarm coordinator started');
+    log.info('');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  PHASE 7: MERCHANT KNOWLEDGE & AUTONOMOUS CHAT');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  MERCHANT KNOWLEDGE:');
+    log.info('  POST /api/knowledge/merchant/:id/entries  - Add knowledge entry');
+    log.info('  POST /api/knowledge/merchant/:id/bulk    - Bulk import');
+    log.info('  GET  /api/knowledge/merchant/:id         - Get knowledge base');
+    log.info('  GET  /api/knowledge/merchant/:id/search - Search knowledge');
+    log.info('  POST /api/knowledge/merchant/:id/menu    - Upload menu');
+    log.info('  POST /api/knowledge/merchant/:id/policy  - Upload policies');
+    log.info('  POST /api/knowledge/merchant/:id/faq     - Upload FAQs');
+    log.info('');
+    log.info('  AUTONOMOUS CHAT:');
+    log.info('  POST /api/chat/message           - Send chat message');
+    log.info('  GET  /api/chat/history/:userId  - Get chat history');
+    log.info('  POST /api/chat/end-session      - End chat session');
+    log.info('  GET  /api/chat/context/:userId  - Get chat context');
+    log.info('');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  PHASE 6: REAL-TIME & MONITORING');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  WEBSOCKET: ws://localhost:' + PORT + '/ws');
+    log.info('  Channels: demand_signals, scarcity_alerts, nudge_events,');
+    log.info('           system_metrics, merchant_dashboard, user_intents');
+    log.info('');
+    log.info('  MONITORING:');
+    log.info('  GET  /api/monitoring/health           - Health check');
+    log.info('  GET  /api/monitoring/dashboard        - Dashboard metrics');
+    log.info('  GET  /api/monitoring/metrics         - All metrics');
+    log.info('  GET  /api/monitoring/alerts           - Active alerts');
+    log.info('  GET  /api/monitoring/websocket        - WS stats');
+    log.info('');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  PHASE 5: MERCHANT DEMAND SIGNALS');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  MERCHANT DASHBOARD:');
+    log.info('  GET  /api/merchant/:id/demand/dashboard - Demand overview');
+    log.info('  GET  /api/merchant/:id/demand/signal   - Real-time signal');
+    log.info('  GET  /api/merchant/:id/procurement     - Procurement signals');
+    log.info('  GET  /api/merchant/:id/intents/top     - Top performing intents');
+    log.info('  GET  /api/merchant/:id/trends          - Demand trends');
+    log.info('  GET  /api/merchant/:id/locations       - City insights');
+    log.info('  GET  /api/merchant/:id/pricing        - Price expectations');
+    log.info('  POST /api/merchant/:id/alerts          - Configure alerts');
+    log.info('');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  PHASE 4: AGENT OS INTEGRATION');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  GET  /api/agent/tools            - List available tools');
+    log.info('  POST /api/agent/tools/execute    - Execute agent tool');
+    log.info('  GET  /api/agent/intents/:userId  - Get active intents');
+    log.info('  GET  /api/agent/dormant/:userId - Get dormant intents');
+    log.info('  GET  /api/agent/enrich/:userId  - Get enriched context');
+    log.info('  POST /api/agent/insight         - Record agent insight');
+    log.info('');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  PHASE 2: SERVICE INTEGRATION');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  SERVICE HEALTH: GET /api/services/health');
+    log.info('  WALLET: GET /api/wallet/:userId/balance');
+    log.info('  ORDERS: POST /api/orders/create');
+    log.info('  FLOWS: POST /api/room-service/execute, /api/shopping/execute');
+    log.info('');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  AUTONOMOUS MODE (DANGEROUS)');
+    log.info('═══════════════════════════════════════════════════════════════');
+    log.info('  POST /api/autonomous/start    - Enable full autonomy');
+    log.info('  POST /api/autonomous/stop     - Disable autonomy');
+    log.info('  POST /api/autonomous/action   - Execute dangerous action');
+    log.info('═══════════════════════════════════════════════════════════════');
   });
 
   // Graceful shutdown
   process.on('SIGTERM', () => {
-    console.log('[Agent Server] Shutting down...');
+    log.info('[Agent Server] Shutting down...');
     coordinator.stop();
     server.close(() => {
-      console.log('[Agent Server] Stopped');
+      log.info('[Agent Server] Stopped');
       process.exit(0);
     });
   });

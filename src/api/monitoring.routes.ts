@@ -32,15 +32,18 @@ router.get('/health', async (_req: Request, res: Response) => {
     const servicesTotal = Object.values(serviceHealth).length;
 
     res.json({
-      ...healthStatus,
-      services: {
-        healthy: servicesHealthy,
-        total: servicesTotal,
-        status: serviceHealth,
+      success: true,
+      data: {
+        ...healthStatus,
+        services: {
+          healthy: servicesHealthy,
+          total: servicesTotal,
+          status: serviceHealth,
+        },
       },
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(500).json({ success: false, message: String(error) });
   }
 });
 
@@ -55,15 +58,18 @@ router.get('/health/detailed', async (_req: Request, res: Response) => {
     const serviceHealth = await getAllServiceHealth();
 
     res.json({
-      health: healthStatus,
-      circuitBreakers: circuitBreaker,
-      services: serviceHealth,
-      webSocket: wsServer.getStats(),
-      memory: process.memoryUsage(),
-      uptime: process.uptime(),
+      success: true,
+      data: {
+        health: healthStatus,
+        circuitBreakers: circuitBreaker,
+        services: serviceHealth,
+        webSocket: wsServer.getStats(),
+        memory: process.memoryUsage(),
+        uptime: process.uptime(),
+      },
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(500).json({ success: false, message: String(error) });
   }
 });
 
@@ -76,9 +82,12 @@ router.get('/health/detailed', async (_req: Request, res: Response) => {
 router.get('/metrics', (_req: Request, res: Response) => {
   const summaries = metricsStore.getAllSummaries();
   res.json({
-    timestamp: Date.now(),
-    metrics: summaries,
-    count: summaries.length,
+    success: true,
+    data: {
+      timestamp: Date.now(),
+      metrics: summaries,
+      count: summaries.length,
+    },
   });
 });
 
@@ -95,7 +104,7 @@ router.get('/metrics/:name', (req: Request, res: Response) => {
     try {
       parsedLabels = JSON.parse(labels as string);
     } catch {
-      res.status(400).json({ error: 'Invalid labels JSON' });
+      res.status(400).json({ success: false, message: 'Invalid labels JSON' });
       return;
     }
   }
@@ -104,10 +113,13 @@ router.get('/metrics/:name', (req: Request, res: Response) => {
   const summary = metricsStore.getSummary(name, parsedLabels);
 
   res.json({
-    name,
-    labels: parsedLabels,
-    history,
-    summary,
+    success: true,
+    data: {
+      name,
+      labels: parsedLabels,
+      history,
+      summary,
+    },
   });
 });
 
@@ -119,7 +131,7 @@ router.post('/metrics/record', (req: Request, res: Response) => {
   const { name, value, type = 'counter', labels } = req.body;
 
   if (!name || value === undefined) {
-    res.status(400).json({ error: 'name and value are required' });
+    res.status(400).json({ success: false, message: 'name and value are required' });
     return;
   }
 
@@ -165,7 +177,7 @@ router.get('/metrics/export', (_req: Request, res: Response) => {
  */
 router.get('/alerts', (_req: Request, res: Response) => {
   const alerts = alertManager.getActiveAlerts();
-  res.json({ alerts, count: alerts.length });
+  res.json({ success: true, data: { alerts, count: alerts.length } });
 });
 
 /**
@@ -175,7 +187,7 @@ router.get('/alerts', (_req: Request, res: Response) => {
 router.get('/alerts/history', (req: Request, res: Response) => {
   const { limit } = req.query;
   const history = alertManager.getAlertHistory(limit ? parseInt(limit as string) : 100);
-  res.json({ history, count: history.length });
+  res.json({ success: true, data: { history, count: history.length } });
 });
 
 /**
@@ -206,12 +218,12 @@ router.post('/alerts/trigger', (req: Request, res: Response) => {
   const { metric, severity, message, value, threshold } = req.body;
 
   if (!metric || !severity || !message) {
-    res.status(400).json({ error: 'metric, severity, and message are required' });
+    res.status(400).json({ success: false, message: 'metric, severity, and message are required' });
     return;
   }
 
   const alert = alertManager.trigger(metric, severity, message, value || 0, threshold || 0);
-  res.json({ success: true, alert });
+  res.json({ success: true, data: { alert } });
 });
 
 // ── Dashboard ────────────────────────────────────────────────────────────────────
@@ -223,9 +235,9 @@ router.post('/alerts/trigger', (req: Request, res: Response) => {
 router.get('/dashboard', async (_req: Request, res: Response) => {
   try {
     const dashboard = await getDashboardMetrics();
-    res.json(dashboard);
+    res.json({ success: true, data: dashboard });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(500).json({ success: false, message: String(error) });
   }
 });
 
@@ -239,12 +251,12 @@ router.post('/thresholds', (req: Request, res: Response) => {
   const { metric, threshold } = req.body;
 
   if (!metric || threshold === undefined) {
-    res.status(400).json({ error: 'metric and threshold are required' });
+    res.status(400).json({ success: false, message: 'metric and threshold are required' });
     return;
   }
 
   metricsCollector.setAlertThreshold(metric, threshold);
-  res.json({ success: true, metric, threshold });
+  res.json({ success: true, data: { metric, threshold } });
 });
 
 /**
@@ -264,7 +276,7 @@ router.get('/thresholds/check', (_req: Request, res: Response) => {
     }
   });
 
-  res.json({ results });
+  res.json({ success: true, data: { results } });
 });
 
 // ── WebSocket Stats ────────────────────────────────────────────────────────────
@@ -275,7 +287,7 @@ router.get('/thresholds/check', (_req: Request, res: Response) => {
  */
 router.get('/websocket', (_req: Request, res: Response) => {
   const stats = wsServer.getStats();
-  res.json(stats);
+  res.json({ success: true, data: stats });
 });
 
 export default router;
