@@ -1,10 +1,14 @@
 /**
  * Merchant Knowledge Service - MongoDB
  * Stores and retrieves merchant knowledge base for autonomous chat
+ * Includes QR context-aware knowledge retrieval
  */
 
 import { MerchantKnowledge } from '../models/index.js';
 import type { IMerchantKnowledge } from '../models/MerchantKnowledge.js';
+
+// QRSource type - local definition since @rez/shared-types not available
+type QRSource = 'rez_now' | 'room_qr' | 'menu_qr' | 'ads_qr';
 
 export interface KnowledgeEntry {
   type: 'menu' | 'policy' | 'faq' | 'offer' | 'hours' | 'contact' | 'custom';
@@ -16,10 +20,23 @@ export interface KnowledgeEntry {
 
 export type KnowledgeType = KnowledgeEntry['type'];
 
+// QR Context-aware knowledge entry extensions
+export interface QRKnowledgeEntry extends KnowledgeEntry {
+  qrSources?: QRSource[];
+  triggerIntents?: string[];
+  priorityForIntent?: Record<string, number>;
+}
+
 export interface ChatContext {
   merchantId: string;
   relevantEntries: IMerchantKnowledge[];
   summary: string;
+}
+
+export interface QRChatContext extends ChatContext {
+  qrSource?: QRSource;
+  currentIntent?: string;
+  suggestedKnowledge?: IMerchantKnowledge[];
 }
 
 /**
@@ -37,6 +54,28 @@ export class MerchantKnowledgeService {
       content: entry.content,
       tags: entry.tags || [],
       metadata: entry.metadata,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  /**
+   * Add QR-aware knowledge entry
+   */
+  async addQRKnowledgeEntry(merchantId: string, entry: QRKnowledgeEntry): Promise<IMerchantKnowledge> {
+    return MerchantKnowledge.create({
+      merchantId,
+      type: entry.type,
+      title: entry.title,
+      content: entry.content,
+      tags: entry.tags || [],
+      metadata: {
+        ...entry.metadata,
+        qrSources: entry.qrSources,
+        triggerIntents: entry.triggerIntents,
+        priorityForIntent: entry.priorityForIntent,
+      },
       active: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -248,6 +287,273 @@ export class MerchantKnowledgeService {
     return { imported: count };
   }
 
+  // ============================================================
+  // QR Context-Aware Knowledge Retrieval
+  // ============================================================
+
+  /**
+   * Search knowledge with QR context awareness
+   */
+  async searchKnowledgeForQR(
+    merchantId: string,
+    query: string,
+    qrSource: QRSource,
+    currentIntent?: string
+  ): Promise<IMerchantKnowledge[]> {
+    const searchQuery: Record<string, unknown> = { merchantId, active: true };
+
+    // Build QR-aware search conditions
+    const qrConditions: Record<string, unknown>[] = [
+      // Entries without QR restrictions (qrSources is null or empty)
+      { 'metadata.qrSources': { $exists: false } },
+      { 'metadata.qrSources': { $eq: null } },
+      { 'metadata.qrSources': { $size: 0 } },
+    ];
+
+    // Add QR source-specific entries
+    qrConditions.push({ 'metadata.qrSources': qrSource });
+
+    // If we have a current intent, also include entries that trigger on this intent
+    if (currentIntent) {
+      qrConditions.push({ 'metadata.triggerIntents': currentIntent });
+    }
+
+    searchQuery.$or = qrConditions;
+
+    // Text search
+    let results = await MerchantKnowledge.find({
+      ...searchQuery,
+      $text: { $search: query },
+    })
+      .sort({ score: { $meta: 'textScore' } })
+      .limit(20);
+
+    // Fallback to regex
+    if (results.length === 0) {
+      results = await MerchantKnowledge.find({
+        ...searchQuery,
+        $or: [
+          { title: { $regex: query, $options: 'i' } },
+          { content: { $regex: query, $options: 'i' } },
+          { tags: { $regex: query, $options: 'i' } },
+        ],
+      }).limit(20);
+    }
+
+    // Sort by QR priority if applicable
+    if (currentIntent && results.length > 0) {
+      results.sort((a, b) => {
+        const aPriority = (a.metadata?.priorityForIntent as Record<string, number>)?.[currentIntent] || 0;
+        const bPriority = (b.metadata?.priorityForIntent as Record<string, number>)?.[currentIntent] || 0;
+        return bPriority - aPriority;
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Get knowledge entries triggered by specific intent
+   */
+  async getKnowledgeForIntent(
+    merchantId: string,
+    intent: string,
+    qrSource?: QRSource
+  ): Promise<IMerchantKnowledge[]> {
+    const query: Record<string, unknown> = {
+      merchantId,
+      active: true,
+      'metadata.triggerIntents': intent,
+    };
+
+    if (qrSource) {
+      query.$or = [
+        { 'metadata.qrSources': { $exists: false } },
+        { 'metadata.qrSources': { $eq: null } },
+        { 'metadata.qrSources': qrSource },
+      ];
+    }
+
+    return MerchantKnowledge.find(query).sort({
+      'metadata.priorityForIntent': -1,
+    });
+  }
+
+  /**
+   * Get QR context for chat
+   */
+  async getQRChatContext(
+    merchantId: string,
+    qrSource: QRSource,
+    currentIntent?: string
+  ): Promise<QRChatContext> {
+    // Get relevant knowledge based on QR source
+    const query: Record<string, unknown> = {
+      merchantId,
+      active: true,
+      $or: [
+        { 'metadata.qrSources': { $exists: false } },
+        { 'metadata.qrSources': { $eq: null } },
+        { 'metadata.qrSources': qrSource },
+      ],
+    };
+
+    const relevantEntries = await MerchantKnowledge.find(query);
+
+    // Filter by intent if provided
+    let suggestedKnowledge: IMerchantKnowledge[] = [];
+    if (currentIntent) {
+      suggestedKnowledge = relevantEntries.filter(
+        e => (e.metadata?.triggerIntents as string[])?.includes(currentIntent)
+      );
+    }
+
+    // Generate summary
+    const grouped = await this.getChatContext(merchantId);
+    const summary = this.generateContextSummary(grouped, qrSource, currentIntent);
+
+    return {
+      merchantId,
+      relevantEntries,
+      summary,
+      qrSource,
+      currentIntent,
+      suggestedKnowledge,
+    };
+  }
+
+  /**
+   * Generate context summary for chat
+   */
+  private generateContextSummary(
+    grouped: Record<string, IMerchantKnowledge[]>,
+    qrSource: QRSource,
+    currentIntent?: string
+  ): string {
+    const parts: string[] = [];
+
+    // Add QR source context
+    const sourceNames: Record<QRSource, string> = {
+      room_qr: 'Hotel Room Service',
+      menu_qr: 'Restaurant Menu',
+      rez_now: 'Store Discovery',
+      ads_qr: 'Campaign',
+    };
+    parts.push(`Context: ${sourceNames[qrSource]}`);
+
+    // Add intent context
+    if (currentIntent) {
+      parts.push(`Current Action: ${currentIntent}`);
+    }
+
+    // Add knowledge summary
+    const menuCount = grouped.menu?.length || 0;
+    const faqCount = grouped.faq?.length || 0;
+    const offerCount = grouped.offer?.length || 0;
+
+    if (menuCount > 0) parts.push(`${menuCount} menu items`);
+    if (faqCount > 0) parts.push(`${faqCount} FAQs`);
+    if (offerCount > 0) parts.push(`${offerCount} offers`);
+
+    return parts.join(' | ');
+  }
+
+  /**
+   * Get knowledge for specific QR scenario
+   */
+  async getKnowledgeForQRScenario(
+    merchantId: string,
+    qrSource: QRSource,
+    scenario: string
+  ): Promise<IMerchantKnowledge[]> {
+    const scenarios: Record<string, string[]> = {
+      // Room QR scenarios
+      'room-service': ['menu', 'policy', 'offer'],
+      'checkout': ['policy', 'offer', 'contact'],
+      'feedback': ['faq', 'policy'],
+
+      // Menu QR scenarios
+      'ordering': ['menu'],
+      'dietary': ['menu', 'faq'],
+      'payment': ['policy', 'contact'],
+
+      // Store QR scenarios
+      'discovery': ['menu', 'offer'],
+      'booking': ['policy', 'faq', 'contact'],
+
+      // Ad QR scenarios
+      'campaign': ['offer', 'contact'],
+      'purchase': ['policy', 'faq'],
+    };
+
+    const types = scenarios[scenario] || ['menu', 'faq', 'offer'];
+
+    const query: Record<string, unknown> = {
+      merchantId,
+      active: true,
+      type: { $in: types },
+      $or: [
+        { 'metadata.qrSources': { $exists: false } },
+        { 'metadata.qrSources': { $eq: null } },
+        { 'metadata.qrSources': qrSource },
+      ],
+    };
+
+    return MerchantKnowledge.find(query);
+  }
+
+  /**
+   * Bulk import QR-aware knowledge entries
+   */
+  async bulkImportQRKnowledge(
+    merchantId: string,
+    entries: QRKnowledgeEntry[]
+  ): Promise<{ imported: number }> {
+    const docs = entries.map((entry) => ({
+      merchantId,
+      type: entry.type,
+      title: entry.title,
+      content: entry.content,
+      tags: entry.tags || [],
+      metadata: {
+        ...entry.metadata,
+        qrSources: entry.qrSources,
+        triggerIntents: entry.triggerIntents,
+        priorityForIntent: entry.priorityForIntent,
+      },
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    const result = await MerchantKnowledge.insertMany(docs, { ordered: false });
+    return { imported: result.length };
+  }
+
+  /**
+   * Update QR knowledge metadata
+   */
+  async updateQRMetadata(
+    entryId: string,
+    qrMetadata: {
+      qrSources?: QRSource[];
+      triggerIntents?: string[];
+      priorityForIntent?: Record<string, number>;
+    }
+  ): Promise<IMerchantKnowledge | null> {
+    return MerchantKnowledge.findByIdAndUpdate(
+      entryId,
+      {
+        $set: {
+          'metadata.qrSources': qrMetadata.qrSources,
+          'metadata.triggerIntents': qrMetadata.triggerIntents,
+          'metadata.priorityForIntent': qrMetadata.priorityForIntent,
+          updatedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+  }
 }
 
 

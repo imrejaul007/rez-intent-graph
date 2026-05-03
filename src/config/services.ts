@@ -32,6 +32,7 @@ function requireServiceUrl(name: string, envVar: string): string {
       ADS_SERVICE_URL: 'http://localhost:4011',
       PMS_SERVICE_URL: 'http://localhost:4012',
       ANALYTICS_SERVICE_URL: 'http://localhost:4013',
+      INSIGHTS_SERVICE_URL: 'http://localhost:4014',
     };
     return portMap[envVar] || `http://localhost:${name}`;
   }
