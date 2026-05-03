@@ -31,6 +31,8 @@ interface IORedisInstance {
   connect(): Promise<void>;
   disconnect(): void;
   on(event: string, handler: (arg?: unknown) => void): void;
+  // Specific overload for message event
+  on(event: 'message', handler: (channel: string, message: string) => void): void;
   zremrangebyscore(key: string, min: number, max: number): Promise<number>;
   zcard(key: string): Promise<number>;
   zadd(key: string, score: number, member: string): Promise<number>;
