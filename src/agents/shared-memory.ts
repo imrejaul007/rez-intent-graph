@@ -580,7 +580,7 @@ export class SharedMemory {
         logger.warn('[Redis] Subscribe failed:', err.message);
       });
 
-      redis.on('message', (ch: string, msg: string) => {
+      redis.on('message', (ch: string, msg: string): void => {
         if (ch === channel) {
           try {
             const message = JSON.parse(msg) as AgentMessage;
