@@ -2,6 +2,7 @@
  * Intent Capture Service - MongoDB
  * Captures user intent signals from various app events
  * Includes Redis caching for hot data
+ * Integrates weather-based signals for context-aware intent capture
  */
 
 import mongoose from 'mongoose';
@@ -13,6 +14,8 @@ import {
 import type { IIntent, IIntentSignal } from '../models/Intent.js';
 import { intentCacheService } from './IntentCacheService.js';
 import { vectorSimilarityService } from './VectorSimilarityService.js';
+import { weatherService, WeatherService } from './WeatherService.js';
+import type { WeatherSignal, WeatherIntentModifiers } from '../types/weather.js';
 
 // Event weights for confidence calculation
 const SIGNAL_WEIGHTS: Record<string, number> = {
@@ -39,20 +42,38 @@ export interface CaptureIntentParams {
   intentQuery?: string;
   metadata?: Record<string, unknown>;
   merchantId?: string;
+  // Weather context
+  weather?: {
+    lat?: number;
+    lon?: number;
+    city?: string;
+    countryCode?: string;
+    condition?: string;
+    temperature?: number;
+  };
 }
 
 export interface CaptureResult {
   intent: IIntent;
   signal: IIntentSignal;
   isNew: boolean;
+  weatherSignal?: WeatherSignal | null;
+  weatherBoostApplied?: number;
 }
 
 /**
  * Intent Capture Service - MongoDB Implementation
  */
 export class IntentCaptureService {
+  private weatherSvc: WeatherService;
+
+  constructor() {
+    this.weatherSvc = weatherService;
+  }
+
   /**
    * Capture an intent event from user action
+   * Includes optional weather context for weather-based intent enrichment
    */
   async capture(params: CaptureIntentParams): Promise<CaptureResult> {
     const {
@@ -64,10 +85,43 @@ export class IntentCaptureService {
       intentQuery,
       metadata,
       merchantId,
+      weather,
     } = params;
 
     // Calculate signal weight
     const signalWeight = SIGNAL_WEIGHTS[eventType] || 0.1;
+
+    // Fetch weather signal if location provided
+    let weatherSignal: WeatherSignal | null = null;
+    let weatherBoost = 0;
+
+    if (weather) {
+      try {
+        if (weather.lat !== undefined && weather.lon !== undefined) {
+          weatherSignal = await this.weatherSvc.getWeatherSignal(
+            userId,
+            weather.lat,
+            weather.lon
+          );
+        } else if (weather.city) {
+          weatherSignal = await this.weatherSvc.getWeatherSignalByCity(
+            userId,
+            weather.city,
+            weather.countryCode
+          );
+        }
+
+        if (weatherSignal) {
+          // Calculate weather boost for this category
+          weatherBoost = this.weatherSvc.getCategoryModifier(
+            weatherSignal.modifiers,
+            category
+          );
+        }
+      } catch (error) {
+        console.warn('[IntentCapture] Weather fetch failed:', error);
+      }
+    }
 
     // Find or create intent
     const existingIntent = await Intent.findOne({ userId, appType, intentKey });
@@ -76,15 +130,30 @@ export class IntentCaptureService {
     let signal: IIntentSignal;
     let isNew = false;
 
+    // Merge weather context into metadata
+    const enrichedMetadata = {
+      ...metadata,
+      ...(weatherSignal && {
+        weatherCondition: weatherSignal.weather.condition,
+        weatherTemperature: weatherSignal.weather.temperature.current,
+        weatherBoost: weatherBoost,
+      }),
+    };
+
     if (existingIntent) {
       // Update existing intent
-      const newConfidence = this.calculateNewConfidence(existingIntent, signalWeight);
+      const newConfidence = this.calculateNewConfidence(
+        existingIntent,
+        signalWeight,
+        weatherBoost
+      );
       const newStatus = this.determineStatus(eventType, newConfidence);
 
       existingIntent.confidence = newConfidence;
       existingIntent.status = newStatus as IIntent['status'];
       existingIntent.intentQuery = intentQuery || existingIntent.intentQuery;
       existingIntent.lastSeenAt = new Date();
+      existingIntent.metadata = enrichedMetadata;
 
       await existingIntent.save();
 
@@ -94,7 +163,7 @@ export class IntentCaptureService {
       signal = {
         eventType,
         weight: signalWeight,
-        data: metadata,
+        data: enrichedMetadata,
         capturedAt: new Date(),
       };
 
@@ -110,7 +179,7 @@ export class IntentCaptureService {
     } else {
       // Create new intent
       isNew = true;
-      const initialConfidence = Math.min(1.0, BASE_CONFIDENCE + signalWeight);
+      const initialConfidence = Math.min(1.0, BASE_CONFIDENCE + signalWeight + weatherBoost);
 
       intent = await Intent.create({
         userId,
@@ -121,13 +190,13 @@ export class IntentCaptureService {
         confidence: initialConfidence,
         status: this.determineStatus(eventType, initialConfidence) as IIntent['status'],
         merchantId,
-        metadata,
+        metadata: enrichedMetadata,
         firstSeenAt: new Date(),
         lastSeenAt: new Date(),
         signals: [{
           eventType,
           weight: signalWeight,
-          data: metadata,
+          data: enrichedMetadata,
           capturedAt: new Date(),
         }],
       });
@@ -147,18 +216,29 @@ export class IntentCaptureService {
       await this.updateCrossAppProfile(userId, appType, category);
     }
 
-    return { intent, signal, isNew };
+    return { intent, signal, isNew, weatherSignal, weatherBoostApplied: weatherBoost };
   }
 
   /**
-   * Calculate new confidence based on existing signals and new event
+   * Calculate new confidence based on existing signals, new event, and weather boost
    */
-  private calculateNewConfidence(existingIntent: IIntent, newSignalWeight: number): number {
+  private calculateNewConfidence(
+    existingIntent: IIntent,
+    newSignalWeight: number,
+    weatherBoost: number = 0
+  ): number {
     const recencyMultiplier = this.calculateRecencyMultiplier(existingIntent.lastSeenAt);
     const velocityBonus = this.calculateVelocityBonus(existingIntent.signals);
     const baseConfidence = existingIntent.confidence;
 
-    const newConfidence = baseConfidence + (newSignalWeight * recencyMultiplier) + velocityBonus;
+    // Apply weather boost (capped to prevent extreme boosts)
+    const cappedWeatherBoost = Math.min(Math.max(weatherBoost, -0.3), 0.3);
+
+    const newConfidence = baseConfidence +
+      (newSignalWeight * recencyMultiplier) +
+      velocityBonus +
+      cappedWeatherBoost;
+
     return Math.min(1.0, Math.max(0.0, newConfidence));
   }
 

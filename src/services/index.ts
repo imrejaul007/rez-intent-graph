@@ -14,3 +14,14 @@ export type { UserAffinityProfile, EnrichedContext } from './CrossAppAggregation
 
 export { MerchantKnowledgeService, merchantKnowledgeService } from './MerchantKnowledgeService.js';
 export type { KnowledgeEntry, ChatContext } from './MerchantKnowledgeService.js';
+
+export { WeatherService, weatherService } from './WeatherService.js';
+export type {
+  WeatherData,
+  WeatherCondition,
+  WeatherIntentModifiers,
+  WeatherSignal,
+  OpenWeatherResponse,
+  WeatherConfig,
+  WeatherEnrichedIntent,
+} from '../types/weather.js';

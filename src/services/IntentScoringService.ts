@@ -1,9 +1,12 @@
 // ── Intent Scoring Service ────────────────────────────────────────────────────
 // Calculates confidence scores, dormancy detection, and revival scoring
 // MongoDB implementation
+// Includes weather-based scoring for context-aware recommendations
 
 import { Intent, DormantIntent } from '../models/index.js';
 import type { IIntent } from '../models/Intent.js';
+import { weatherService } from './WeatherService.js';
+import type { WeatherSignal, WeatherEnrichedIntent } from '../types/weather.js';
 
 export interface ScoringContext {
   intentId: string;
@@ -274,6 +277,136 @@ export class IntentScoringService {
     }
 
     return totalMs / (signals.length - 1);
+  }
+
+  /**
+   * Get weather signal for a user location
+   */
+  async getWeatherSignal(
+    userId: string,
+    lat: number,
+    lon: number
+  ): Promise<WeatherSignal | null> {
+    return weatherService.getWeatherSignal(userId, lat, lon);
+  }
+
+  /**
+   * Apply weather modifiers to intents for ranking
+   * Returns intents with adjusted confidence scores based on current weather
+   */
+  async applyWeatherModifiers(
+    userId: string,
+    intents: IIntent[],
+    weatherSignal: WeatherSignal
+  ): Promise<WeatherEnrichedIntent[]> {
+    const enrichedIntents: WeatherEnrichedIntent[] = [];
+
+    for (const intent of intents) {
+      const weatherBoost = weatherService.getCategoryModifier(
+        weatherSignal.modifiers,
+        intent.category
+      );
+
+      // Apply weather boost to base confidence
+      const cappedBoost = Math.min(Math.max(weatherBoost, -0.3), 0.3);
+      const finalConfidence = Math.min(
+        1.0,
+        Math.max(0.0, intent.confidence + cappedBoost)
+      );
+
+      let boostReason = '';
+      if (cappedBoost > 0.1) {
+        boostReason = `${weatherSignal.weather.condition} weather increases ${intent.category} intent`;
+      } else if (cappedBoost < -0.1) {
+        boostReason = `${weatherSignal.weather.condition} weather decreases ${intent.category} intent`;
+      }
+
+      enrichedIntents.push({
+        intentId: intent._id.toString(),
+        userId: intent.userId,
+        intentKey: intent.intentKey,
+        category: intent.category,
+        baseConfidence: intent.confidence,
+        weatherModifier: cappedBoost,
+        finalConfidence,
+        weatherBoostReason: boostReason,
+      });
+    }
+
+    // Sort by final confidence (weather-adjusted)
+    enrichedIntents.sort((a, b) => b.finalConfidence - a.finalConfidence);
+
+    return enrichedIntents;
+  }
+
+  /**
+   * Get weather-aware recommendations for a user
+   * Enriches active intents with current weather context
+   */
+  async getWeatherAwareRecommendations(
+    userId: string,
+    lat: number,
+    lon: number,
+    limit: number = 10
+  ): Promise<WeatherEnrichedIntent[]> {
+    // Get active intents
+    const intents = await Intent.find({
+      userId,
+      status: 'ACTIVE',
+    })
+      .sort({ confidence: -1 })
+      .limit(50);
+
+    if (intents.length === 0) {
+      return [];
+    }
+
+    // Get weather signal
+    const weatherSignal = await this.getWeatherSignal(userId, lat, lon);
+
+    if (!weatherSignal) {
+      // Return intents without weather enrichment
+      return intents.slice(0, limit).map((intent) => ({
+        intentId: intent._id.toString(),
+        userId: intent.userId,
+        intentKey: intent.intentKey,
+        category: intent.category,
+        baseConfidence: intent.confidence,
+        weatherModifier: 0,
+        finalConfidence: intent.confidence,
+        weatherBoostReason: 'Weather data unavailable',
+      }));
+    }
+
+    // Apply weather modifiers
+    const enriched = await this.applyWeatherModifiers(userId, intents, weatherSignal);
+
+    return enriched.slice(0, limit);
+  }
+
+  /**
+   * Calculate weather-adjusted revival score for dormant intents
+   */
+  async calculateWeatherAdjustedRevivalScore(
+    dormantIntentId: string,
+    weatherSignal: WeatherSignal
+  ): Promise<number> {
+    const dormant = await DormantIntent.findById(dormantIntentId);
+    if (!dormant) return 0;
+
+    // Get base revival score
+    const baseScore = this.computeRevivalScore(dormant);
+
+    // Apply weather boost if category matches
+    const weatherBoost = weatherService.getCategoryModifier(
+      weatherSignal.modifiers,
+      dormant.category
+    );
+
+    // Weather can boost revival potential
+    const adjustedScore = baseScore + (weatherBoost * 0.2);
+
+    return Math.min(1.0, Math.max(0.0, adjustedScore));
   }
 }
 
