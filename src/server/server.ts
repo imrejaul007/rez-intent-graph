@@ -9,6 +9,7 @@ import { connectDB, getConnectionStatus } from '../database/mongodb.js';
 import intentRouter from '../api/intent.routes.js';
 import commerceMemoryRouter from '../api/commerce-memory.routes.js';
 import metricsRouter from '../api/metrics.routes.js';
+import fraudRouter from '../api/fraud.routes.js';
 import {
   standardLimiter,
   strictLimiter,
@@ -98,6 +99,7 @@ app.get('/health', async (_req: Request, res: Response) => {
 
 app.use('/api/intent', intentRouter);
 app.use('/api/commerce-memory', commerceMemoryRouter);
+app.use('/api/fraud', fraudRouter); // Cashback fraud prevention
 app.use('/metrics', metricsRouter); // Prometheus metrics
 
 // ── Latency Tracking Middleware ──────────────────────────────────────────────
@@ -157,6 +159,7 @@ async function startServer() {
       console.log(`[Intent Graph] Health check: http://localhost:${PORT}/health`);
       console.log(`[Intent Graph] Intent API: http://localhost:${PORT}/api/intent`);
       console.log(`[Intent Graph] Commerce Memory API: http://localhost:${PORT}/api/commerce-memory`);
+      console.log(`[Intent Graph] Fraud Prevention API: http://localhost:${PORT}/api/fraud`);
       console.log(`[Intent Graph] Available features:`);
       console.log(`[Intent Graph]   - Dormant Intent Cron: ${ENABLE_DORMANT_CRON ? 'enabled' : 'disabled'}`);
       console.log(`[Intent Graph]   - Agent Swarm: ${ENABLE_AGENTS ? 'enabled' : 'disabled'}`);

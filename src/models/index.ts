@@ -12,6 +12,28 @@ export { Nudge } from './Nudge.js';
 export { MerchantDemandSignal } from './MerchantDemandSignal.js';
 export { NudgeSchedule } from './NudgeSchedule.js';
 
+// Fraud Prevention Models
+export {
+  CashbackRequest,
+  FraudReport,
+  UserRiskProfile,
+  RewardChainNode,
+  FraudConfig,
+  seedFraudConfig,
+  DEFAULT_FRAUD_THRESHOLDS,
+} from './CashbackFraud.js';
+export type {
+  ICashbackRequestDocument,
+  IFraudReportDocument,
+  IFraudFlag,
+  IUserRiskProfileDocument,
+  IRewardChainNodeDocument,
+  IFraudConfigDocument,
+  FraudFlagType,
+  FraudSeverity,
+  FraudAction,
+} from './CashbackFraud.js';
+
 export type {
   IIntent,
   IIntentSignal,

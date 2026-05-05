@@ -22,6 +22,7 @@ export type { KnowledgeType, KnowledgeEntry, ChatContext } from './services/Merc
 // API Routes
 export { default as intentRouter } from './api/intent.routes.js';
 export { default as commerceMemoryRouter } from './api/commerce-memory.routes.js';
+export { default as fraudRouter } from './api/fraud.routes.js';
 
 // Middleware
 export { intentCaptureMiddleware } from './middleware/intentMiddleware.js';

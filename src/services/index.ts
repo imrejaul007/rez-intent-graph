@@ -25,3 +25,17 @@ export type {
   WeatherConfig,
   WeatherEnrichedIntent,
 } from '../types/weather.js';
+
+export {
+  CashbackFraudPreventionService,
+  cashbackFraudPrevention,
+} from './CashbackFraudPrevention.js';
+export type {
+  ICashbackRequest,
+  FraudCheckResult,
+  FraudFlag,
+  FraudFlagType,
+  FraudCheck,
+  VelocityMetrics,
+  AnomalyContext,
+} from './CashbackFraudPrevention.js';
