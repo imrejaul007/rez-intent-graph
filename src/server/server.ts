@@ -26,7 +26,7 @@ import { metricsMiddleware, registry } from '../utils/metrics.js';
 import healthRouter from '../health/index.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3007;
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 
