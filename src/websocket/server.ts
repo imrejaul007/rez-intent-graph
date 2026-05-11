@@ -5,21 +5,45 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { IncomingMessage } from 'http';
+import jwt from 'jsonwebtoken';
 import { sharedMemory } from '../agents/shared-memory.js';
 import { log } from '../utils/logger.js';
 import { timingSafeEqual } from 'crypto';
+
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_ISSUER = process.env.JWT_ISSUER || 'rez-platform';
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'rez-websocket';
+
+// Throw error in production if JWT_SECRET is not set
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  log.warn('JWT_SECRET not set - using insecure default for development only');
+}
 
 // ── WebSocket Authentication ──────────────────────────────────────────────────────
 
 interface AuthResult {
   success: boolean;
   userId?: string;
+  role?: string;
   error?: string;
+}
+
+interface JwtPayload {
+  userId: string;
+  role?: string;
+  merchantId?: string;
+  iat?: number;
+  exp?: number;
+  iss?: string;
+  aud?: string | string[];
 }
 
 /**
  * Validate WebSocket connection token
- * Supports multiple auth methods: Bearer token, API key, or internal service token
+ * Supports multiple auth methods: JWT Bearer token, API key, or internal service token
  */
 function validateConnectionToken(req: IncomingMessage): AuthResult {
   // Get token from query string (for WebSocket clients)
@@ -39,7 +63,7 @@ function validateConnectionToken(req: IncomingMessage): AuthResult {
       const tokenBuffer = Buffer.from(internalToken);
       const expectedBuffer = Buffer.from(configuredInternalToken);
       if (tokenBuffer.length === expectedBuffer.length && timingSafeEqual(tokenBuffer, expectedBuffer)) {
-        return { success: true, userId: 'internal-service' };
+        return { success: true, userId: 'internal-service', role: 'internal' };
       }
     } catch {
       log.warn('[WebSocket] Auth failed: timing-safe comparison error');
@@ -57,7 +81,7 @@ function validateConnectionToken(req: IncomingMessage): AuthResult {
         const expectedBuffer = Buffer.from(configuredApiKey);
         if (keyBuffer.length === expectedBuffer.length && timingSafeEqual(keyBuffer, expectedBuffer)) {
           const merchantId = url.searchParams.get('merchantId');
-          return { success: true, userId: merchantId || 'merchant-api' };
+          return { success: true, userId: merchantId || 'merchant-api', role: 'merchant' };
         }
       } catch {
         log.warn('[WebSocket] Auth failed: API key comparison error');
@@ -66,22 +90,55 @@ function validateConnectionToken(req: IncomingMessage): AuthResult {
     }
   }
 
-  // Check Bearer token (JWT validation would happen here in production)
+  // Check JWT Bearer token (full validation)
   if (authHeader?.startsWith('Bearer ')) {
     const bearerToken = authHeader.substring(7);
-    if (bearerToken && bearerToken.length > 10) {
-      // In production, validate JWT here
-      // For now, accept well-formed tokens
-      return { success: true, userId: 'authenticated-user' };
-    }
+    return validateJwtToken(bearerToken);
   }
 
-  // Check token query param
-  if (token && token.length > 10) {
-    return { success: true, userId: 'token-user' };
+  // Check token query param (must be JWT)
+  if (token) {
+    return validateJwtToken(token);
   }
 
   return { success: false, error: 'Missing or invalid authentication' };
+}
+
+/**
+ * Verify and decode JWT token
+ */
+function validateJwtToken(token: string): AuthResult {
+  if (!token || token.trim().length === 0) {
+    return { success: false, error: 'Empty token' };
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    }) as JwtPayload;
+
+    if (!decoded.userId) {
+      return { success: false, error: 'Token missing userId claim' };
+    }
+
+    return {
+      success: true,
+      userId: decoded.userId,
+      role: decoded.role || 'user',
+    };
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      log.warn('[WebSocket] JWT expired');
+      return { success: false, error: 'Token expired' };
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      log.warn('[WebSocket] JWT validation failed', { error: error.message });
+      return { success: false, error: 'Invalid token' };
+    }
+    log.error('[WebSocket] JWT verification error', { error: error instanceof Error ? error.message : String(error) });
+    return { success: false, error: 'Token verification failed' };
+  }
 }
 
 // ── Subscription Types ────────────────────────────────────────────────────────────
@@ -115,6 +172,8 @@ interface WebSocketMessage {
 interface Client {
   id: string;
   ws: WebSocket;
+  userId: string;
+  role: string;
   subscriptions: Set<SubscriptionChannel>;
   filters: Map<SubscriptionChannel, Subscription['filter']>;
   lastPing: number;
@@ -157,6 +216,8 @@ export class ReZWSServer {
       const client: Client = {
         id: clientId,
         ws,
+        userId: authResult.userId!,
+        role: authResult.role || 'user',
         subscriptions: new Set(),
         filters: new Map(),
         lastPing: Date.now(),

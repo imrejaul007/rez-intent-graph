@@ -37,5 +37,17 @@ temp/
 # Secrets (never commit these)
 *.pem
 *.key
+*.pfx
+*.crt
 credentials.json
 secrets.json
+secrets.yaml
+service-account.json
+
+# Claude Code / Claude Flow
+.claude/
+.claude-flow/
+.claude/skills/
+
+# Render deployment
+.render
